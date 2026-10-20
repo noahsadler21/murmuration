@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sky test</title>
+<style>
+  :root { --ink: #1d1e20; --dim: rgba(29,30,32,0.62); --panel: rgba(250,250,251,0.62); --line: rgba(30,32,36,0.10); --accent: #2f3a4a; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #c4c5c6; font: 12px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #hud { position: fixed; left: 16px; top: 16px; max-width: 330px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line);
+         border-radius: 8px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); font-variant-numeric: tabular-nums; }
+  #hud h1 { font-size: 13px; font-weight: 600; margin: 0 0 2px; }
+  #hud .sub { color: var(--dim); margin-bottom: 6px; }
+  #hud table { border-collapse: collapse; width: 100%; }
+  #hud td { padding: 1px 0; vertical-align: top; }
+  #hud td:first-child { color: var(--dim); padding-right: 10px; white-space: nowrap; }
+  #hud .badge { display: inline-block; padding: 0 6px; border-radius: 9px; background: var(--accent); color: #f4f5f7; font-size: 11px; }
+  #hud .badge.off { background: #8a5a2b; }
+  #hud .foot { margin-top: 6px; color: var(--dim); font-size: 11px; }
+  #err { position: fixed; right: 16px; bottom: 16px; color: #c8352b; font-weight: 600; }
+  body.nohud #hud { display: none; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"><h1 id="hTitle">Sky test</h1><div class="sub" id="hSub">loading sky and weather…</div><table id="hTab"></table><div class="foot" id="hFoot"></div></div>
+<div id="err"></div>
+<script type="module">
+// Standalone test page for the Sky builder (src/sky.js, src/sky_shaders.js, src/weather.js).
+// URL: site, t (ISO UTC | sunset | now), wx (live | sample:overcast | sample:clear), look, q, view
+// (watcher | up | north | orbit | top), birds (0|1), birdScale, fx, skydebug, hud (0|1), freeze (0|1), scale, msaa
+import * as THREE from 'three';
+import { makeState, QUALITY } from './sky/state_stub.js';
+import { Sky, Grade, SKY_GLSL } from '../src/sky.js';
+import { SITES, fetchWeather, sampleWeather, applyToState, sunTimes, localDateOf, localTimeOf, sunPosition, OPEN_METEO_CREDIT } from '../src/weather.js';
+
+const P = new URLSearchParams(location.search);
+const errors = [];
+const errBox = document.getElementById('err');
+window.addEventListener('error', e => { errors.push(String(e.message)); errBox.textContent = e.message; });
+window.addEventListener('unhandledrejection', e => { errors.push(String(e.reason && e.reason.message || e.reason)); errBox.textContent = String(e.reason); });
+if (P.get('hud') === '0') document.body.classList.add('nohud');
+
+const state = makeState();
+const q = P.get('q') || 'medium';
+state.quality = q; state.preset = QUALITY[q]; state.fx = { ...QUALITY[q].fx };
+for (const kv of (P.get('fx') || '').split(',').filter(Boolean)) { const [k, v] = kv.split(':'); state.fx[k] = +v; }
+state.look = P.get('look') || 'signature';
+state.site = SITES.find(s => s.id === (P.get('site') || 'brighton')) || SITES[0];
+
+// ---------------------------------------------------------------- renderer and targets (SPEC §1)
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true });
+renderer.toneMapping = THREE.NoToneMapping;
+if (!renderer.extensions.has('EXT_color_buffer_float')) throw new Error('This page needs WebGL2 with float render targets.');
+const scaleQ = +(P.get('scale') || state.preset.scale);
+const msaa = P.has('msaa') ? +P.get('msaa') : state.preset.msaa;
+let W = 0, H = 0;
+const sceneRT = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: msaa, depthBuffer: true });
+const frameRT = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, depthBuffer: false });
+
+// ---------------------------------------------------------------- profiler (timer queries)
+const gl = renderer.getContext();
+const tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+const prof = {
+  on: false, pending: [], open: null, results: {},
+  begin(name) { if (!this.on || !tq) return; const qq = gl.createQuery(); gl.beginQuery(tq.TIME_ELAPSED_EXT, qq); this.open = { name, q: qq }; },
+  end() { if (!this.open) return; gl.endQuery(tq.TIME_ELAPSED_EXT); this.pending.push(this.open); this.open = null; },
+  async collect() {
+    const out = {};
+    for (const p of this.pending) {
+      for (let k = 0; k < 400 && !gl.getQueryParameter(p.q, gl.QUERY_RESULT_AVAILABLE); k++) await new Promise(r => setTimeout(r, 2));
+      if (!gl.getParameter(tq.GPU_DISJOINT_EXT) && gl.getQueryParameter(p.q, gl.QUERY_RESULT_AVAILABLE)) (out[p.name] = out[p.name] || []).push(gl.getQueryParameter(p.q, gl.QUERY_RESULT) / 1e6);
+      gl.deleteQuery(p.q);
+    }
+    this.pending = [];
+    return out;
+  },
+};
+
+const sky = new Sky({ renderer, state, prof });
+const grade = new Grade({ renderer, state });
+const scene = new THREE.Scene();
+scene.add(sky.object3d);
+const camera = new THREE.PerspectiveCamera(35, 16 / 9, 0.5, 80000);
+
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, state.preset.dprCap) * scaleQ;
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  const v = renderer.getDrawingBufferSize(new THREE.Vector2());
+  W = v.x; H = v.y;
+  sceneRT.setSize(W, H); frameRT.setSize(W, H);
+  sky.setSize(W, H); grade.setSize(W, H);
+  camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------------------------------------------------------------- stand-in flock: real VAT starlings (retro LOD, flat albedo)
+const flockGroup = new THREE.Group(); scene.add(flockGroup);
+async function loadBirds() {
+  const meta = await (await fetch('../assets/birds/starling_retro.json')).json();
+  const bin = await (await fetch('../assets/birds/starling_retro.bin')).arrayBuffer();
+  const B = meta.buffers;
+  const index = new Uint16Array(bin, B.index.offset, B.index.count);
+  const vat = new Uint16Array(bin, B.vatPos.offset, B.vatPos.count);
+  const tex = new THREE.DataTexture(vat, meta.verts, meta.rows, THREE.RGBAFormat, THREE.HalfFloatType);
+  tex.needsUpdate = true;
+  const N = +(P.get('nbirds') || 2400);
+  const g = new THREE.InstancedBufferGeometry();
+  const vid = new Float32Array(meta.verts); for (let i = 0; i < meta.verts; i++) vid[i] = i;
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(meta.verts * 3), 3));
+  g.setAttribute('aVid', new THREE.BufferAttribute(vid, 1));
+  g.setIndex(new THREE.BufferAttribute(index, 1));
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const off = new Float32Array(N * 4), hd = new Float32Array(N * 2);
+  const head = 0.6;   // common heading (rad from +X), ± jitter
+  for (let i = 0; i < N; i++) {
+    // two lobes, flattened sheet: the shape of a murmuration ~ 130 × 30 × 70 m
+    let x, y, z, k = 0;
+    do { x = rnd() * 2 - 1; y = rnd() * 2 - 1; z = rnd() * 2 - 1; k++; } while (x * x + y * y + z * z > 1 && k < 20);
+    const lobe = rnd() < 0.55 ? -1 : 1;
+    off[i * 4] = x * 55 + lobe * 30; off[i * 4 + 1] = 110 + y * 14 + x * 8 * lobe; off[i * 4 + 2] = z * 35 + lobe * 6;
+    const r = rnd();
+    off[i * 4 + 3] = r < 0.7 ? rnd() * 32 : (r < 0.9 ? 32 : 33);
+    const a = head + (rnd() - 0.5) * 0.5; hd[i * 2] = Math.cos(a); hd[i * 2 + 1] = Math.sin(a);
+  }
+  g.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 4));
+  g.setAttribute('aHead', new THREE.InstancedBufferAttribute(hd, 2));
+  g.instanceCount = N;
+  const alb = meta.albedoLinear.body;
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    uniforms: { ...state.light.u, uVat: { value: tex }, uAlb: { value: new THREE.Vector3(...alb) }, uT: { value: 0 }, uScale: { value: +(P.get('birdScale') || 1) } },
+    vertexShader: `
+      attribute float aVid; attribute vec4 aOff; attribute vec2 aHead;
+      uniform sampler2D uVat; uniform float uT; uniform float uScale;
+      varying vec3 vW;
+      void main() {
+        float row = aOff.w;
+        if (row < 32.0) row = mod(row + uT * 13.3 * 32.0, 32.0);
+        int r0 = int(floor(row)); int r1 = r0 >= 31 ? (row < 32.0 ? 0 : r0) : r0 + 1; float f = fract(row);
+        if (aOff.w >= 32.0) { r1 = r0; f = 0.0; }
+        vec3 p = mix(texelFetch(uVat, ivec2(int(aVid), r0), 0).xyz, texelFetch(uVat, ivec2(int(aVid), r1), 0).xyz, f) * uScale;
+        vec3 fw = normalize(vec3(aHead.x, 0.0, aHead.y)); vec3 up = vec3(0, 1, 0);
+        vec3 l = normalize(cross(up, fw)); vec3 u = cross(fw, l);
+        vec3 w = aOff.xyz + l * p.x + u * p.y + fw * p.z;
+        vW = w;
+        gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
+      }`,
+    fragmentShader: `
+      ${SKY_GLSL.light}
+      uniform vec3 uAlb; varying vec3 vW;
+      void main() {
+        vec3 n = normalize(cross(dFdx(vW), dFdy(vW)));
+        if (dot(n, cameraPosition - vW) < 0.0) n = -n;
+        vec3 col = uAlb * (skyAmbient(n) + uSunColor * max(dot(n, uSunDir), 0.0));
+        col = skyAerial(col, vW);
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+  const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false;
+  flockGroup.add(mesh);
+  return mat;
+}
+
+// ---------------------------------------------------------------- weather and time
+let wx = null, view = P.get('view') || 'watcher', frozenTime = P.get('freeze') === '1';
+async function loadWeather() {
+  const site = state.site;
+  const tp = P.get('t') || 'sunset';
+  let tMs;
+  if (tp === 'now') tMs = Date.now();
+  else if (tp === 'sunset') tMs = sunTimes(P.get('date') || localDateOf(Date.now(), site.tz), site.lat, site.lon).sunsetMs;
+  else tMs = Date.parse(tp);
+  const D = localDateOf(tMs, site.tz);
+  const t0 = performance.now();
+  wx = await fetchWeather(site, D, { wx: P.get('wx') || 'live', log: m => console.log(m) });
+  state.time.startMs = state.time.nowMs = tMs;
+  applyToState(state, sampleWeather(wx, tMs));
+  window.__wxFetchMs = performance.now() - t0;
+}
+
+// ---------------------------------------------------------------- views
+const target = new THREE.Vector3(0, 110, 0);
+function placeCamera(t) {
+  const A = state.sun.azimuthDeg * Math.PI / 180;
+  const toSun = new THREE.Vector3(Math.sin(A), 0, -Math.cos(A));
+  camera.up.set(0, 1, 0);
+  if (view === 'watcher') {
+    camera.position.copy(toSun).multiplyScalar(-260).setY(1.7);
+    camera.lookAt(target);
+  } else if (view === 'away') {          // back to the sun
+    camera.position.copy(toSun).multiplyScalar(260).setY(1.7);
+    camera.lookAt(target);
+  } else if (view === 'up') {            // straight up, screen-top = north (S5)
+    camera.position.set(0, 1.7, 0); camera.up.set(0, 0, -1); camera.lookAt(0, 1000, 0);
+  } else if (view === 'wide') {          // wide panorama toward the sun, low
+    camera.position.copy(toSun).multiplyScalar(-260).setY(1.7);
+    camera.lookAt(camera.position.clone().add(toSun.clone().multiplyScalar(100)).setY(1.7 + 100 * Math.tan(12 * Math.PI / 180)));
+  } else if (view === 'orbit') {
+    const a = 0.35 + (t || 0) * 0.02;
+    camera.position.set(Math.sin(a) * 380, 160, Math.cos(a) * 380); camera.lookAt(0, 60, 0);
+  } else if (view === 'top') {
+    camera.position.set(0, 900, 300); camera.lookAt(0, 0, 0);
+  }
+  camera.fov = view === 'wide' ? 60 : (view === 'up' ? 70 : 35);
+  camera.updateProjectionMatrix();
+}
+
+// ---------------------------------------------------------------- frame
+let last = performance.now(), birdMat = null, simT = 0, lastWx = 0;
+function frame(dt) {
+  if (!frozenTime) state.time.nowMs += dt * 1000 * state.time.scale;
+  simT += dt;
+  if (wx && !window.skyTest.windLocked && (state.time.nowMs - lastWx > 1000 || state.time.nowMs < lastWx)) { applyToState(state, sampleWeather(wx, state.time.nowMs)); lastWx = state.time.nowMs; }
+  placeCamera(simT);
+  if (birdMat) birdMat.uniforms.uT.value = frozenTime ? 0.37 : simT;
+  sky.update(dt, camera);
+  prof.begin('scene');
+  renderer.setRenderTarget(sceneRT); renderer.setClearColor(0x000000, 1); renderer.clear(); renderer.render(scene, camera);
+  prof.end();
+  prof.begin('grade'); grade.render(sceneRT.texture, frameRT); prof.end();
+  prof.begin('present'); grade.present(frameRT.texture); prof.end();
+}
+function loop(t) {
+  const dt = Math.min(0.1, (t - last) / 1000); last = t;
+  if (!window.skyTest.paused) frame(dt);
+  requestAnimationFrame(loop);
+}
+
+// ---------------------------------------------------------------- HUD
+const fmtW = w => `${w.speed.toFixed(1)} m/s from ${Math.round(w.dirDeg)}°`;
+function hud() {
+  const s = state.weather.sample, site = state.site;
+  if (!s) return;
+  const src = { forecast: 'live (forecast)', 'historical-forecast': 'historical', archive: 'archive', cache: 'cached', sample: 'sample weather (offline)' }[wx.source] || wx.source;
+  document.getElementById('hTitle').textContent = `${site.name}`;
+  document.getElementById('hSub').innerHTML = `${localDateOf(state.time.nowMs, site.tz)} ${localTimeOf(state.time.nowMs, site.tz)} local · <span class="badge ${wx.source === 'sample' ? 'off' : ''}">${src}</span>`;
+  const sm = sky.debug.meanSky() || {};
+  const rows = [
+    ['Cloud low / mid / high', `${Math.round(s.cloudLow * 100)} / ${Math.round(s.cloudMid * 100)} / ${Math.round(s.cloudHigh * 100)} %  (total ${Math.round(s.cloudCover * 100)} %)`],
+    ['Low deck base', `${Math.round(state.clouds.baseLowM)} m (Espy LCL)`],
+    ['Wind 10 m', fmtW(s.wind10) + `, gust ${s.gust10.toFixed(1)}`],
+    ['Wind 80 m', fmtW(s.wind80)],
+    ['Wind 850 hPa', fmtW(s.wind850) + ' (low deck)'],
+    ['Wind 500 / 300 hPa', `${s.wind500.speed.toFixed(0)} m/s ${Math.round(s.wind500.dirDeg)}° / ${s.wind300.speed.toFixed(0)} m/s ${Math.round(s.wind300.dirDeg)}°`],
+    ['Temp / dew point', `${s.temperatureC.toFixed(1)} / ${s.dewPointC.toFixed(1)} °C, RH ${Math.round(s.humidity * 100)} %`],
+    ['Visibility', `${(s.visibilityM / 1000).toFixed(1)} km`],
+    ['Pressure', `${s.pressureHPa.toFixed(0)} hPa`],
+    ['Sun', `alt ${state.sun.altitudeDeg.toFixed(1)}°, az ${state.sun.azimuthDeg.toFixed(0)}° · sunset ${localTimeOf(state.sun.sunsetMs, site.tz)}`],
+    ['Look / quality', `${grade.look} / ${state.quality}`],
+  ];
+  document.getElementById('hTab').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+  document.getElementById('hFoot').textContent = `${OPEN_METEO_CREDIT}` + (wx.synthetic ? ' · synthetic sample' : '');
+}
+setInterval(hud, 250);
+
+// ---------------------------------------------------------------- test API
+window.skyTest = {
+  state, sky, grade, renderer, camera, prof, errors, P, paused: false,
+  get wx() { return wx; },
+  setLook(l) { sky.setLook(l); state.look = l; },
+  setView(v) { view = v; },
+  setFreeze(b) { frozenTime = !!b; },
+  setCovers(c) { sky.coverOverride = c; },
+  windLocked: false,
+  lockWind(b) { this.windLocked = !!b; },
+  // grayscale of the presented canvas, box-downsampled by f, centre crop fraction cf
+  gray(f = 4, cf = 0.7) {
+    const { w, h, data } = this.readCanvas();
+    const W2 = Math.floor(w * cf / f), H2 = Math.floor(h * cf / f), x0 = Math.floor(w * (1 - cf) / 2), y0 = Math.floor(h * (1 - cf) / 2);
+    const g = new Float32Array(W2 * H2);
+    for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) {
+      let s = 0;
+      for (let j = 0; j < f; j++) for (let i = 0; i < f; i++) { const k = ((y0 + y * f + j) * w + x0 + x * f + i) * 4; s += data[k] * 0.2126 + data[k + 1] * 0.7152 + data[k + 2] * 0.0722; }
+      g[y * W2 + x] = s / (f * f);
+    }
+    return { W: W2, H: H2, g };
+  },
+  // best integer shift (dx, dy) that maps image a onto b (b(x) ≈ a(x - d)), brute force SSD within ±R
+  shift(a, b, R = 24) {
+    let best = [0, 0], be = Infinity;
+    const { W, H } = a;
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      let e = 0, n = 0;
+      for (let y = R; y < H - R; y += 2) for (let x = R; x < W - R; x += 2) { const d = b.g[(y + dy) * W + x + dx] - a.g[y * W + x]; e += d * d; n++; }
+      e /= n; if (e < be) { be = e; best = [dx, dy]; }
+    }
+    return { dx: best[0], dy: best[1], err: be };
+  },
+  showBirds(b) { flockGroup.visible = !!b; },
+  advance(sec, steps = 1) { this.paused = true; for (let i = 0; i < steps; i++) frame(sec / steps); hud(); },
+  render(n = 1, dt = 1 / 60) { this.paused = true; for (let i = 0; i < n; i++) frame(dt); hud(); },
+  resume() { this.paused = false; },
+  size() { return [W, H]; },
+  async gpu(n = 40) {
+    this.paused = true; prof.on = true; await prof.collect();
+    for (let i = 0; i < n; i++) { frame(1 / 60); if (i % 8 === 7) await new Promise(r => setTimeout(r, 0)); }
+    prof.on = false;
+    const r = await prof.collect(), out = {};
+    for (const k in r) { const a = r[k].sort((x, y) => x - y); out[k] = +a[a.length >> 1].toFixed(3); }
+    return out;
+  },
+  // S6-style metrics on the presented canvas (crop in device px; default = whole frame)
+  analyze(crop) {
+    const { w, h, data } = this.readCanvas();
+    const [x0, y0, x1, y1] = crop || [0, 0, w, h];
+    const rowMean = y => { let r = 0, g = 0, b = 0, n = 0; for (let x = x0; x < x1; x++) { const i = (y * w + x) * 4; r += data[i]; g += data[i + 1]; b += data[i + 2]; n++; } return [r / n, g / n, b / n]; };
+    const band = (ya, yb) => { const a = [0, 0, 0]; for (let y = ya; y < yb; y++) { const m = rowMean(y); a[0] += m[0]; a[1] += m[1]; a[2] += m[2]; } return a.map(v => +(v / (yb - ya)).toFixed(2)); };
+    let s = 0, s2 = 0, n = 0, bmrMin = 1e9, bmrMax = -1e9, spread = 0, lo = 255, hi = 0;
+    const colL = new Float64Array(x1 - x0), rowL = new Float64Array(y1 - y0);
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+      const i = (y * w + x) * 4, r = data[i], g = data[i + 1], b = data[i + 2], l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      s += l; s2 += l * l; n++; colL[x - x0] += l; rowL[y - y0] += l;
+      bmrMin = Math.min(bmrMin, b - r); bmrMax = Math.max(bmrMax, b - r);
+      spread = Math.max(spread, Math.max(r, g, b) - Math.min(r, g, b)); lo = Math.min(lo, l); hi = Math.max(hi, l);
+    }
+    const mean = s / n, std = Math.sqrt(Math.max(0, s2 / n - mean * mean));
+    let colStep = 0, rowStep = 0;
+    for (let i = 1; i < colL.length; i++) colStep = Math.max(colStep, Math.abs(colL[i] - colL[i - 1]) / (y1 - y0));
+    for (let i = 1; i < rowL.length; i++) rowStep = Math.max(rowStep, Math.abs(rowL[i] - rowL[i - 1]) / (x1 - x0));
+    const hb = Math.max(2, Math.round((y1 - y0) * 0.03));
+    const top = band(y0, y0 + hb), bot = band(y1 - hb, y1);
+    return { w, h, crop: [x0, y0, x1, y1], top, bottom: bot, topMinusBottom: +(((top[0] + top[1] + top[2]) - (bot[0] + bot[1] + bot[2])) / 3).toFixed(2),
+             mean: +mean.toFixed(2), std: +std.toFixed(2), min: +lo.toFixed(1), max: +hi.toFixed(1), bMinusR: [bmrMin, bmrMax], maxChannelSpread: spread,
+             colStep: +colStep.toFixed(2), rowStep: +rowStep.toFixed(2) };
+  },
+  readCanvas() {   // RGBA8 of the presented canvas, top-down rows
+    const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, buf = new Uint8Array(w * h * 4);
+    renderer.setRenderTarget(null);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    const out = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y++) out.set(buf.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+    return { w, h, data: out };
+  },
+};
+(async () => {
+  await loadWeather();
+  if (P.get('skydebug')) sky.debug.view(P.get('skydebug'));
+  if (P.get('birds') !== '0') { try { birdMat = await loadBirds(); } catch (e) { console.warn('birds not loaded', e); } }
+  if (P.get('birds') === '0') flockGroup.visible = false;
+  frame(1 / 60);
+  hud();
+  window.skyTest.ready = true;
+  requestAnimationFrame(loop);
+})().catch(e => { errors.push(String(e && e.stack || e)); errBox.textContent = String(e); console.error(e); });
+</script>
+</body>
+</html>

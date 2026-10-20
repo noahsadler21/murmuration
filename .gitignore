@@ -1,0 +1,10 @@
+# Raw scans and .blend files (2.4 GB, several over GitHub's 100 MB limit). The site only needs assets/.
+models/
+captures/
+# Sketchfab thumbnails of third-party models, used for the search only
+_previews/
+.claude/
+__pycache__/
+*.pyc
+*.blend1
+node_modules/

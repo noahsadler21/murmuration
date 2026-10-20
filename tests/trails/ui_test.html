@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI test</title>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<script type="module">
+// UI test bench (SPEC §9 T7). Loads the real template.html markup + styles, wires src/ui.js to a stub state, and
+// paints stand-in backdrops for the three looks into #c so contrast and layout can be measured and captured.
+import { makeState, NOISE_PRESETS } from './state_stub.js';
+import { initUI, CREDIT_LINES } from '../../src/ui.js';
+
+const SITES = [
+  { id: 'brighton', name: 'Brighton West Pier, UK', lat: 50.8214, lon: -0.1517, tz: 'Europe/London', ground: 'sea' },
+  { id: 'otmoor', name: 'RSPB Otmoor, Oxfordshire, UK', lat: 51.8120, lon: -1.1720, tz: 'Europe/London', ground: 'reedbed' },
+  { id: 'hamwall', name: 'RSPB Ham Wall, Somerset, UK', lat: 51.1510, lon: -2.7880, tz: 'Europe/London', ground: 'reedbed' },
+  { id: 'gretna', name: 'Gretna Green, Scotland, UK', lat: 54.9970, lon: -3.0650, tz: 'Europe/London', ground: 'field' },
+  { id: 'aber', name: 'Aberystwyth Pier, Wales, UK', lat: 52.4153, lon: -4.0874, tz: 'Europe/London', ground: 'sea' },
+  { id: 'rome', name: 'Rome (Termini), Italy', lat: 41.9010, lon: 12.5010, tz: 'Europe/Rome', ground: 'city' },
+  { id: 'tonder', name: 'Sort Sol, Tønder Marsh, Denmark', lat: 54.9400, lon: 8.8000, tz: 'Europe/Copenhagen', ground: 'reedbed' },
+];
+
+const html = await (await fetch('../../template.html', { cache: 'no-store' })).text();
+const doc = new DOMParser().parseFromString(html, 'text/html');
+document.head.appendChild(doc.querySelector('style'));
+for (const n of [...doc.body.children]) if (n.tagName !== 'SCRIPT') document.body.appendChild(document.importNode(n, true));
+document.getElementById('status').classList.add('gone');
+
+const state = makeState();
+state.site = SITES[0];
+state.time.nowMs = Date.parse('2025-11-20T16:05:00Z');
+state.weather = { status: 'ok', source: 'forecast', error: null, sample: { tMs: state.time.nowMs, source: 'forecast', cloudCover: 0.92,
+  cloudLow: 0.88, cloudMid: 0.55, cloudHigh: 0.3, wind10: { speed: 6.2, dirDeg: 225 }, wind80: { speed: 9.1, dirDeg: 231 },
+  wind850: { speed: 14, dirDeg: 235 }, wind500: { speed: 22, dirDeg: 250 }, wind300: { speed: 35, dirDeg: 260 }, gust10: 11.4,
+  temperatureC: 9.6, dewPointC: 7.4, humidity: 0.86, visibilityM: 18000, pressureHPa: 1012 } };
+state.sun.altitudeDeg = -0.6; state.sun.azimuthDeg = 238.4;
+const events = [];
+const orig = state.emit.bind(state);
+state.emit = (ev, p) => { events.push([ev, p]); orig(ev, p); };
+// the integrator's merge behaviour for preset / randomise (so the sliders have something to follow)
+state.on('preset', n => Object.assign(state.noise, NOISE_PRESETS[n]));
+state.on('randomise', () => { state.noise.seed = (state.noise.seed * 7919 + 13) % 99991; state.noise.curl = +(Math.random() * 3).toFixed(2); });
+window.murm = { stats: () => ({ fps: 60.2 }) };
+const ui = initUI({ state, sites: SITES, presets: NOISE_PRESETS });
+
+// ---------- stand-in backdrops ----------
+const cv = document.getElementById('c');
+const BG = {
+  signature: { top: [197, 197, 198], bot: [190, 191, 192], ground: [70, 72, 74] },
+  physical: { top: [118, 146, 186], bot: [214, 200, 186], ground: [52, 54, 56] },
+  dusk: { top: [104, 116, 141], bot: [144, 126, 124], ground: [38, 36, 40] },
+};
+let bgImg = null;
+function paint(look, img) {
+  const dpr = devicePixelRatio || 1;
+  cv.width = Math.round(innerWidth * dpr); cv.height = Math.round(innerHeight * dpr);
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  if (img) { c.drawImage(img, 0, 0, cv.width, cv.height); return; }
+  const b = BG[look], gy = Math.round(cv.height * 0.86);
+  const g = c.createLinearGradient(0, 0, 0, gy);
+  g.addColorStop(0, `rgb(${b.top})`); g.addColorStop(1, `rgb(${b.bot})`);
+  c.fillStyle = g; c.fillRect(0, 0, cv.width, gy);
+  c.fillStyle = `rgb(${b.ground})`; c.fillRect(0, gy, cv.width, cv.height - gy);
+}
+window.setLookBg = async (look, imgUrl) => {
+  state.look = look;
+  if (imgUrl) { bgImg = new Image(); bgImg.src = imgUrl; await bgImg.decode(); paint(look, bgImg); } else paint(look);
+  ui.sync();
+};
+paint('signature');
+
+// ---------- WCAG contrast over the painted backdrop ----------
+const parse = s => { const m = s.match(/rgba?\(([^)]+)\)/); if (!m) return [0, 0, 0, 0]; const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [v[0], v[1], v[2], v.length > 3 ? v[3] : 1]; };
+const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+const L = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+const over = (top, bot) => [0, 1, 2].map(i => top[i] * top[3] + bot[i] * (1 - top[3]));
+window.contrastReport = () => {
+  const c = cv.getContext('2d', { willReadFrequently: true }), dpr = devicePixelRatio || 1;
+  const rows = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = walker.nextNode())) {
+    if (!n.textContent.trim()) continue;
+    const el = n.parentElement;
+    if (!el.closest('.ui') || el.closest('.hidden') || el.closest('button:disabled,select:disabled,input:disabled')) continue;
+    if (el.closest('option')) continue;
+    const r = el.getBoundingClientRect(); if (!r.width || !r.height) continue;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden') continue;
+    let worst = 99;
+    for (const [fx, fy] of [[0.2, 0.5], [0.5, 0.5], [0.8, 0.5]]) {
+      const x = Math.min(cv.width - 1, Math.round((r.left + r.width * fx) * dpr)), y = Math.min(cv.height - 1, Math.round((r.top + r.height * fy) * dpr));
+      const p = c.getImageData(x, y, 1, 1).data; let bg = [p[0], p[1], p[2]];
+      // composite every ancestor background from the panel down (no backdrop brightness: conservative)
+      const chain = []; for (let e = el; e && e !== document.body; e = e.parentElement) chain.push(e);
+      for (const e of chain.reverse()) { const b = parse(getComputedStyle(e).backgroundColor); if (b[3] > 0) bg = over(b, bg); }
+      const fg = parse(cs.color); const f = over(fg, bg);
+      const la = L(f), lb = L(bg); const cr = (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+      worst = Math.min(worst, cr);
+    }
+    rows.push({ text: n.textContent.trim().slice(0, 28), id: el.id || el.closest('[id]')?.id, cr: +worst.toFixed(2) });
+  }
+  rows.sort((a, b) => a.cr - b.cr);
+  return { min: rows[0]?.cr, worst: rows.slice(0, 5), count: rows.length };
+};
+
+// ---------- pinned ids + events ----------
+window.uiChecks = async () => {
+  const R = {};
+  const ids = ['c', 'status', 'title', 'readout', 'bar', 'falconToggle', 'attackBtn', 'gustBtn', 'noiseBtn', 'placeBtn', 'creditsBtn', 'fps',
+    'noisePanel', 'nzPreset', 'nzCurl', 'nzScale', 'nzOct', 'nzWander', 'nzSeed', 'nzRandom', 'nzGustRate',
+    'placePanel', 'siteSel', 'dateIn', 'timeIn', 'nowBtn', 'sunsetBtn', 'clockSel',
+    'ornitoPanel', 'ofFrames', 'ofVfps', 'ofSkip', 'ofDecay', 'ofBlend', 'ofTrack', 'ofAuto', 'ofUntracked', 'ofCaption', 'ofStart', 'ofNew', 'ofExport', 'shutter', 'credits'];
+  R.missingIds = ids.filter(i => !document.getElementById(i));
+  const sels = ['[data-mode=live]', '[data-mode=ornito]', '[data-look=signature]', '[data-look=physical]', '[data-look=dusk]',
+    '[data-cam=watcher]', '[data-cam=orbit]', '[data-cam=falcon]', '[data-q=low]', '[data-q=medium]', '[data-q=high]'];
+  R.missingSel = sels.filter(s => !document.querySelector('#bar ' + s));
+  R.lookLabels = ['signature', 'physical', 'dusk'].map(l => document.querySelector(`[data-look=${l}]`).textContent);
+  const fire = (el, type = 'click') => { if (type === 'click') el.click(); else el.dispatchEvent(new Event(type, { bubbles: true })); };
+  const expect = [];
+  const check = (name, act, ev, pred = () => true) => { events.length = 0; act(); const hit = events.find(e => e[0] === ev && pred(e[1])); expect.push({ name, ev, ok: !!hit, got: events.map(e => e[0]).join(',') }); };
+  const $ = s => document.querySelector(s);
+  check('physical', () => fire($('[data-look=physical]')), 'look', p => p === 'physical');
+  check('dusk', () => fire($('[data-look=dusk]')), 'look', p => p === 'dusk');
+  check('signature', () => fire($('[data-look=signature]')), 'look', p => p === 'signature');
+  check('orbit', () => fire($('[data-cam=orbit]')), 'camera', p => p === 'orbit');
+  check('falcon cam', () => fire($('[data-cam=falcon]')), 'camera', p => p === 'falcon');
+  check('watcher', () => fire($('[data-cam=watcher]')), 'camera', p => p === 'watcher');
+  check('q high', () => fire($('[data-q=high]')), 'quality', p => p === 'high');
+  check('q low', () => fire($('[data-q=low]')), 'quality', p => p === 'low');
+  check('q medium', () => fire($('[data-q=medium]')), 'quality', p => p === 'medium');
+  check('falconToggle', () => fire($('#falconToggle')), 'falcon', p => p === false);
+  check('falconToggle back', () => fire($('#falconToggle')), 'falcon', p => p === true);
+  check('attack', () => fire($('#attackBtn')), 'attack');
+  check('gust', () => fire($('#gustBtn')), 'gust');
+  check('preset', () => { $('#nzPreset').value = 'agitated'; fire($('#nzPreset'), 'change'); }, 'preset', p => p === 'agitated');
+  R.presetSynced = +$('#nzCurl').value === NOISE_PRESETS.agitated.curl && +$('#nzOct').value === NOISE_PRESETS.agitated.octaves;
+  check('curl', () => { $('#nzCurl').value = '3.1'; fire($('#nzCurl'), 'input'); }, 'noise', p => p.curl === 3.1);
+  check('scale', () => { $('#nzScale').value = '0.7'; fire($('#nzScale'), 'input'); }, 'noise', p => p.scale === 0.7);
+  check('oct', () => { $('#nzOct').value = '5'; fire($('#nzOct'), 'input'); }, 'noise', p => p.octaves === 5);
+  check('wander', () => { $('#nzWander').value = '1.2'; fire($('#nzWander'), 'input'); }, 'noise', p => p.wander === 1.2);
+  check('gustRate', () => { $('#nzGustRate').value = '2'; fire($('#nzGustRate'), 'input'); }, 'noise', p => p.gustRate === 2);
+  check('seed', () => { $('#nzSeed').value = '42'; fire($('#nzSeed'), 'change'); }, 'noise', p => p.seed === 42);
+  check('random', () => fire($('#nzRandom')), 'randomise');
+  check('site', () => { $('#siteSel').value = 'otmoor'; fire($('#siteSel'), 'change'); }, 'site', p => p === 'otmoor');
+  check('date', () => { $('#dateIn').value = '2025-12-01'; $('#timeIn').value = '15:40'; fire($('#dateIn'), 'change'); }, 'time', p => p.iso === '2025-12-01T15:40:00.000Z');
+  check('time BST', () => { $('#dateIn').value = '2025-07-01'; $('#timeIn').value = '21:10'; fire($('#timeIn'), 'change'); }, 'time', p => p.iso === '2025-07-01T20:10:00.000Z');
+  check('now', () => fire($('#nowBtn')), 'time', p => p === 'now');
+  check('sunset', () => fire($('#sunsetBtn')), 'time', p => p === 'sunset');
+  check('clock', () => { $('#clockSel').value = '10'; fire($('#clockSel'), 'change'); }, 'clock', p => p === 10);
+  R.clockState = state.time.scale;
+  $('#clockSel').value = '1'; fire($('#clockSel'), 'change');
+  check('mode ornito', () => fire($('[data-mode=ornito]')), 'mode', p => p === 'ornito');
+  R.ornitoPanelShown = !$('#ornitoPanel').classList.contains('hidden') && !$('#shutter').classList.contains('hidden');
+  check('start', () => fire($('#ofStart')), 'ornito:start');
+  // integrator stand-in: start runs, frames arrive
+  state.ornito.running = true; orig('ornito:frame', { done: 40, frames: 150 });
+  R.shutterMid = { text: $('#shutter .count').textContent, offset: $('#shutter .ring').getAttribute('stroke-dashoffset'), open: $('#shutter').classList.contains('open') };
+  check('stop', () => fire($('#ofStart')), 'ornito:stop');
+  state.ornito.running = false; state.ornito.done = 150; orig('ornito:frame', { done: 150, frames: 150, finished: true });
+  R.shutterDone = { text: $('#shutter .count').textContent, offset: $('#shutter .ring').getAttribute('stroke-dashoffset'), exportEnabled: !$('#ofExport').disabled };
+  check('export', () => fire($('#ofExport')), 'ornito:export');
+  check('new', () => fire($('#ofNew')), 'ornito:new');
+  check('auto', () => fire($('#ofAuto')), 'select', p => p.auto === 24);
+  check('track all', () => { $('#ofTrack').value = 'all'; fire($('#ofTrack'), 'change'); }, 'select', p => p.ids === 'all');
+  for (const [id, key, v] of [['ofFrames', 'frames', '500'], ['ofSkip', 'skip', '2'], ['ofDecay', 'decay', '0.01']]) { $('#' + id).value = v; fire($('#' + id), 'input'); expect.push({ name: id, ok: state.ornito[key] === +v }); }
+  $('#ofVfps').value = '480'; fire($('#ofVfps'), 'change'); expect.push({ name: 'ofVfps', ok: state.ornito.vfps === 480 });
+  $('#ofBlend').value = 'lighten'; fire($('#ofBlend'), 'change'); expect.push({ name: 'ofBlend', ok: state.ornito.blend === 'lighten' });
+  $('#ofUntracked').click(); expect.push({ name: 'ofUntracked', ok: state.ornito.showUntracked === true });
+  $('#ofCaption').click(); expect.push({ name: 'ofCaption', ok: state.ornito.caption === true });
+  Object.assign(state.ornito, { frames: 150, skip: 0, decay: 0, vfps: 240, blend: 'darken', showUntracked: false, caption: false });
+  // keys
+  const key = k => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, code: k === ' ' ? 'Space' : 'Key' + k.toUpperCase(), bubbles: true }));
+  check('key space', () => key(' '), 'ornito:start');
+  check('key O', () => key('o'), 'mode', p => p === 'live');
+  check('key 2', () => key('2'), 'look', p => p === 'physical');
+  check('key 3', () => key('3'), 'look', p => p === 'dusk');
+  check('key 1', () => key('1'), 'look', p => p === 'signature');
+  check('key C', () => key('c'), 'camera', p => p === 'orbit');
+  check('key F', () => key('f'), 'attack');
+  check('key G', () => key('g'), 'gust');
+  check('key R', () => key('r'), 'randomise');
+  key('c'); key('c');
+  R.ariaPressed = { look: $('[data-look=signature]').getAttribute('aria-pressed'), cam: $('[data-cam=watcher]').getAttribute('aria-pressed') };
+  R.events = expect.filter(e => !e.ok);
+  R.eventCount = expect.length;
+  // credits verbatim
+  const lis = [...document.querySelectorAll('#credits [data-c=required] li')].map(l => l.textContent);
+  const want = ['European starling scan: Virtual Museums of Małopolska / Tomek Natural Science Museum (MP 314), CC0',
+    'Peregrine falcon scan: The Watt Institution (Inverclyde), CC-BY 4.0', 'Weather data by Open-Meteo.com (CC-BY 4.0)', 'three.js r170 (MIT)'];
+  R.creditsVerbatim = want.every(w => lis.includes(w));
+  R.creditLinks = { peregrine: !!document.querySelector('#credits a[href*="sketchfab"]'), openMeteo: !!document.querySelector('#credits a[href="https://open-meteo.com/"]') };
+  R.pass = !R.missingIds.length && !R.missingSel.length && !R.events.length && R.presetSynced && R.creditsVerbatim && R.ornitoPanelShown &&
+    R.shutterDone.text.startsWith('150 / 150') && R.creditLinks.peregrine && R.creditLinks.openMeteo;
+  return R;
+};
+window.layoutCheck = () => {
+  const vw = document.documentElement.clientWidth;
+  const over = [...document.querySelectorAll('.ui:not(.hidden), .ui:not(.hidden) *')].filter(e => { const r = e.getBoundingClientRect(); return r.width && (r.right > vw + 0.5 || r.left < -0.5); })
+    .map(e => (e.id || e.tagName) + ':' + Math.round(e.getBoundingClientRect().right));
+  // nothing over the frame centre (central 20 % box)
+  const cx = innerWidth / 2, cy = innerHeight / 2, bw = innerWidth * 0.1, bh = innerHeight * 0.1;
+  const centre = [...document.querySelectorAll('.ui:not(.hidden)')].filter(e => { const r = e.getBoundingClientRect(); return r.left < cx + bw && r.right > cx - bw && r.top < cy + bh && r.bottom > cy - bh; }).map(e => e.id);
+  return { vw, scrollW: document.documentElement.scrollWidth, bodyScrollW: document.body.scrollWidth, overflow: over.slice(0, 8), overCentre: centre };
+};
+window.showPanel = name => ui.togglePanel(name, true);
+window.uiState = state;
+window.ready = true;
+</script>
+</body>
+</html>

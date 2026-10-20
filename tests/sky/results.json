@@ -1,0 +1,932 @@
+{
+ "date": "2026-10-20T01:57:21.179Z",
+ "consoleErrors": [],
+ "notes": [
+  "GPU: ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11). SPEC §3 budgets are for an Intel Arc iGPU; this machine has only this GPU, so measured ms are reported as-is with an Arc estimate of ×4.5 (FP32 ~20 vs ~4.6 TFLOPS, ~448 vs ~100 GB/s).",
+  "Signature grade: x = (L/Ls)·(Ls/Lb)^0.4·(Lb/Lp)^0.2·g(el) — the spec's Lref made local (sky-only skyRT, its blurred mip, the azimuth-mean elevation profile, a canonical overcast gradient g(el)=0.77+0.76·sin el). A plain L/Lref cannot hold the reference gradient across real weather (a sunset-lit horizon or blue zenith flips it); this keeps birds/ground at full contrast against the exact sky behind them (no halos: birds are not in skyRT). Curve f(1)=0.765, f'(1)=0.085, f(0.06)=0.18, f(0.02)=0.08; chroma white-balanced to the mean sky, 8 % kept, soft-limited to ±0.4 %.",
+  "S2 uses Network.setBlockedURLs(*open-meteo.com*): CDP offline emulation also blocks the localhost page and the three.js CDN, so the page cannot boot. In a real offline load the browser logs its own failed-fetch network errors (not page exceptions).",
+  "Real-weather cases (Open-Meteo forecast data, found by tests/sky/scan.js): clear = Rome 2026-10-19T15:42Z (low 4 %), broken = RSPB Otmoor 2026-10-19T15:32Z (low 48 %), overcast = Sort Sol/Tønder 2026-10-19T13:46Z (low 100 %, high 61 %). Stand-in VAT starlings scaled ×6 in the captures for context."
+ ],
+ "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+ "S1": {
+  "got": "https://api.open-meteo.com/v1/forecast?latitude=50.8214&longitude=-0.1517&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,surface_pressure,visibility,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,wind_gusts_10m,wind_speed_80m,wind_direction_80m,wind_speed_850hPa,wind_direction_850hPa,wind_speed_500hPa,wind_direction_500hPa,wind_speed_300hPa,wind_direction_300hPa&current=temperature_2m,relative_humidity_2m,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m&daily=sunrise,sunset&start_date=2025-11-19&end_date=2025-11-21&wind_speed_unit=ms&timeformat=unixtime&timezone=auto",
+  "exp": "https://api.open-meteo.com/v1/forecast?latitude=50.8214&longitude=-0.1517&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,surface_pressure,visibility,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_direction_10m,wind_gusts_10m,wind_speed_80m,wind_direction_80m,wind_speed_850hPa,wind_direction_850hPa,wind_speed_500hPa,wind_direction_500hPa,wind_speed_300hPa,wind_direction_300hPa&current=temperature_2m,relative_humidity_2m,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m&daily=sunrise,sunset&start_date=2025-11-19&end_date=2025-11-21&wind_speed_unit=ms&timeformat=unixtime&timezone=auto",
+  "pass": true
+ },
+ "S2": {
+  "live": [
+   {
+    "site": "brighton",
+    "D": "2026-10-20",
+    "source": "forecast",
+    "badge": "2026-10-20 17:58 local · live (forecast)",
+    "requestAExact": true,
+    "cloud": [
+     0.92,
+     0.62,
+     0
+    ]
+   },
+   {
+    "site": "otmoor",
+    "D": "2026-10-20",
+    "source": "forecast",
+    "badge": "2026-10-20 18:00 local · live (forecast)",
+    "requestAExact": true,
+    "cloud": [
+     0.99,
+     1,
+     0
+    ]
+   },
+   {
+    "site": "rome",
+    "D": "2026-10-20",
+    "source": "forecast",
+    "badge": "2026-10-20 18:21 local · live (forecast)",
+    "requestAExact": true,
+    "cloud": [
+     0,
+     0.97,
+     1
+    ]
+   }
+  ],
+  "offline": {
+   "source": "sample",
+   "badge": "2026-10-20 17:58 local · sample weather (offline)",
+   "attempts": [
+    {
+     "step": "forecast",
+     "ok": false,
+     "error": "Failed to fetch"
+    },
+    {
+     "step": "forecast",
+     "ok": false,
+     "error": "Failed to fetch"
+    },
+    {
+     "step": "historical-forecast",
+     "ok": false,
+     "error": "Failed to fetch"
+    },
+    {
+     "step": "historical-forecast",
+     "ok": false,
+     "error": "Failed to fetch"
+    },
+    {
+     "step": "cache",
+     "ok": false
+    },
+    {
+     "step": "sample",
+     "ok": true
+    }
+   ]
+  },
+  "cache": {
+   "source": "cache",
+   "cachedFrom": "forecast",
+   "badge": "2026-10-20 17:58 local · cached"
+  },
+  "method": "Network.setBlockedURLs(*open-meteo.com*)",
+  "pass": true
+ },
+ "S3": {
+  "sunset": [
+   {
+    "site": "brighton",
+    "D": "2026-10-20",
+    "calcUTC": "2026-10-20T16:58:08.852Z",
+    "openMeteoUTC": "2026-10-20T16:58:04.000Z",
+    "diffMin": 0.08,
+    "pass": true
+   },
+   {
+    "site": "otmoor",
+    "D": "2026-10-20",
+    "calcUTC": "2026-10-20T17:00:25.168Z",
+    "openMeteoUTC": "2026-10-20T17:00:22.000Z",
+    "diffMin": 0.05,
+    "pass": true
+   },
+   {
+    "site": "rome",
+    "D": "2026-10-20",
+    "calcUTC": "2026-10-20T16:21:00.430Z",
+    "openMeteoUTC": "2026-10-20T16:20:55.000Z",
+    "diffMin": 0.09,
+    "pass": true
+   }
+  ],
+  "brighton_20251221_1200": {
+   "alt": 15.796,
+   "az": 180.284,
+   "pass": true
+  },
+  "equator_20250320_1207": {
+   "alt": 89.895,
+   "pass": true
+  },
+  "pass": true
+ },
+ "S4": {
+  "table": [
+   {
+    "target": 0,
+    "low": 0,
+    "mid": 0,
+    "high": 0
+   },
+   {
+    "target": 0.25,
+    "low": 0.2499,
+    "mid": 0.25,
+    "high": 0.2497
+   },
+   {
+    "target": 0.5,
+    "low": 0.4999,
+    "mid": 0.5,
+    "high": 0.5001
+   },
+   {
+    "target": 0.75,
+    "low": 0.7499,
+    "mid": 0.7502,
+    "high": 0.7511
+   },
+   {
+    "target": 1,
+    "low": 1,
+    "mid": 1,
+    "high": 1
+   }
+  ],
+  "maxErr": 0.0011,
+  "pass": true,
+  "capture": "captures/sky_coverage_debug_050.png"
+ },
+ "S5": {
+  "off": {
+   "dx": 1460.6300101717009,
+   "dz": -1022.7441436575547,
+   "vt": [
+    1460.6300101716995,
+    -1022.7441436575521
+   ]
+  },
+  "sE": {
+   "dx": -7,
+   "dy": 0,
+   "err": 0.4422854073209539
+  },
+  "sN": {
+   "dx": 0,
+   "dy": -7,
+   "err": 0.1509612403782289
+  },
+  "sC": {
+   "dx": -7,
+   "dy": -6,
+   "err": 1.0366886642127267
+  },
+  "headScreenDeg": 49.4,
+  "headWindDeg": 55,
+  "diffDeg": 5.6,
+  "v850": {
+   "speed": 14.86,
+   "fromDeg": 234.99999999999997
+  },
+  "offsetErrM": 0,
+  "pass": true
+ },
+ "zeroConsoleErrors": true,
+ "S6": {
+  "metrics": {
+   "w": 1296,
+   "h": 716,
+   "crop": [
+    8,
+    8,
+    1288,
+    708
+   ],
+   "top": [
+    194.72,
+    195.84,
+    196.84
+   ],
+   "bottom": [
+    189.73,
+    190.77,
+    191.76
+   ],
+   "topMinusBottom": 5.05,
+   "mean": 194.66,
+   "std": 2.68,
+   "min": 184.9,
+   "max": 200,
+   "bMinusR": [
+    0,
+    3
+   ],
+   "maxChannelSpread": 3,
+   "colStep": 0.12,
+   "rowStep": 0.09
+  },
+  "checks": {
+   "top": true,
+   "bottom": true,
+   "topMinusBottom": true,
+   "bMinusR": true,
+   "channelSpread": true,
+   "std": true,
+   "banding": true
+  },
+  "pass": true,
+  "sideBySide": "captures/sky_signature_vs_reference.png"
+ },
+ "S7": {
+  "dusk": {
+   "w": 1296,
+   "h": 716,
+   "crop": [
+    8,
+    8,
+    1288,
+    708
+   ],
+   "top": [
+    109.47,
+    118.54,
+    142.9
+   ],
+   "bottom": [
+    138.28,
+    120.58,
+    119.12
+   ],
+   "topMinusBottom": -2.36,
+   "mean": 131.88,
+   "std": 13.62,
+   "min": 107.9,
+   "max": 163.8,
+   "bMinusR": [
+    -45,
+    39
+   ],
+   "maxChannelSpread": 45,
+   "colStep": 0.18,
+   "rowStep": 0.34
+  },
+  "physical": {
+   "w": 1296,
+   "h": 716,
+   "crop": [
+    8,
+    8,
+    1288,
+    708
+   ],
+   "top": [
+    182.66,
+    184.69,
+    203.05
+   ],
+   "bottom": [
+    155.64,
+    157.92,
+    178.86
+   ],
+   "topMinusBottom": 25.99,
+   "mean": 190.28,
+   "std": 19.74,
+   "min": 150.1,
+   "max": 239.2,
+   "bMinusR": [
+    -8,
+    25
+   ],
+   "maxChannelSpread": 25,
+   "colStep": 0.2,
+   "rowStep": 0.5
+  },
+  "checks": {
+   "duskTop": true,
+   "duskBottom": true,
+   "physicalNoClip": true
+  },
+  "pass": true
+ },
+ "real": [
+  {
+   "case": "clear",
+   "site": "rome",
+   "t": "2026-10-19T15:42:00Z",
+   "look": "signature",
+   "file": "captures/sky_real_clear_signature.png",
+   "source": "forecast",
+   "cloudLowMidHigh": [
+    0.04,
+    0,
+    0
+   ],
+   "visibilityKm": 40.58,
+   "wind850": {
+    "speed": 2.947492708056438,
+    "dirDeg": 101.93807001271539
+   },
+   "sunAltAz": [
+    6.54,
+    250.2
+   ],
+   "sky": {
+    "top": [
+     194.31,
+     195.92,
+     197.53
+    ],
+    "bottom": [
+     191.45,
+     191.72,
+     192.11
+    ],
+    "std": 6.65
+   }
+  },
+  {
+   "case": "clear",
+   "site": "rome",
+   "t": "2026-10-19T15:42:00Z",
+   "look": "physical",
+   "file": "captures/sky_real_clear_physical.png",
+   "source": "forecast",
+   "cloudLowMidHigh": [
+    0.04,
+    0,
+    0
+   ],
+   "visibilityKm": 40.58,
+   "wind850": {
+    "speed": 2.947492708056438,
+    "dirDeg": 101.93807001271539
+   },
+   "sunAltAz": [
+    6.54,
+    250.2
+   ],
+   "sky": {
+    "top": [
+     146.59,
+     167.85,
+     190.8
+    ],
+    "bottom": [
+     222.12,
+     222.72,
+     219.88
+    ],
+    "std": 18.71
+   }
+  },
+  {
+   "case": "clear",
+   "site": "rome",
+   "t": "2026-10-19T15:42:00Z",
+   "look": "dusk",
+   "file": "captures/sky_real_clear_dusk.png",
+   "source": "forecast",
+   "cloudLowMidHigh": [
+    0.04,
+    0,
+    0
+   ],
+   "visibilityKm": 40.58,
+   "wind850": {
+    "speed": 2.947492708056438,
+    "dirDeg": 101.93807001271539
+   },
+   "sunAltAz": [
+    6.54,
+    250.2
+   ],
+   "sky": {
+    "top": [
+     116.09,
+     125.17,
+     149.94
+    ],
+    "bottom": [
+     163.95,
+     140.09,
+     135.13
+    ],
+    "std": 9.28
+   }
+  },
+  {
+   "case": "broken",
+   "site": "otmoor",
+   "t": "2026-10-19T15:32:00Z",
+   "look": "signature",
+   "file": "captures/sky_real_broken_signature.png",
+   "source": "forecast",
+   "cloudLowMidHigh": [
+    0.48,
+    0,
+    0
+   ],
+   "visibilityKm": 34.94,
+   "wind850": {
+    "speed": 9.790220280263677,
+    "dirDeg": 128.2914840347627
+   },
+   "sunAltAz": [
+    11.93,
+    236.09
+   ],
+   "sky": {
+    "top": [
+     194.01,
+     195.98,
+     197.35
+    ],
+    "bottom": [
+     190.79,
+     191.53,
+     191.83
+    ],
+    "std": 7.56
+   }
+  },
+  {
+   "case": "broken",
+   "site": "otmoor",
+   "t": "2026-10-19T15:32:00Z",
+   "look": "physical",
+   "file": "captures/sky_real_broken_physical.png",
+   "source": "forecast",
+   "cloudLowMidHigh": [
+    0.48,
+    0,
+    0
+   ],
+   "visibilityKm": 34.94,
+   "wind850": {
+    "speed": 9.790220280263677,
+    "dirDeg": 128.2914840347627
+   },
+   "sunAltAz": [
+    11.93,
+    236.09
+   ],
+   "sky": {
+    "top": [
+     154.39,
+     178.22,
+     202.75
+    ],
+    "bottom": [
+     197.04,
+     197.82,
+     197.91
+    ],
+    "std": 15.2
+   }
+  },
+  {
+   "case": "broken",
+   "site": "otmoor",
+   "t": "2026-10-19T15:32:00Z",
+   "look": "dusk",
+   "file": "captures/sky_real_broken_dusk.png",
+   "source": "forecast",
+   "cloudLowMidHigh": [
+    0.48,
+    0,
+    0
+   ],
+   "visibilityKm": 34.94,
+   "wind850": {
+    "speed": 9.790220280263677,
+    "dirDeg": 128.2914840347627
+   },
+   "sunAltAz": [
+    11.93,
+    236.09
+   ],
+   "sky": {
+    "top": [
+     100.58,
+     115.98,
+     145.32
+    ],
+    "bottom": [
+     154.68,
+     134.21,
+     129.43
+    ],
+    "std": 15.45
+   }
+  },
+  {
+   "case": "overcast",
+   "site": "tonder",
+   "t": "2026-10-19T13:46:00Z",
+   "look": "signature",
+   "file": "captures/sky_real_overcast_signature.png",
+   "source": "forecast",
+   "cloudLowMidHigh": [
+    1,
+    0,
+    0.61
+   ],
+   "visibilityKm": 36.23,
+   "wind850": {
+    "speed": 8.360361952537307,
+    "dirDeg": 85.33799594794776
+   },
+   "sunAltAz": [
+    17.23,
+    220.5
+   ],
+   "sky": {
+    "top": [
+     195.03,
+     195.77,
+     196.54
+    ],
+    "bottom": [
+     189.88,
+     190.69,
+     191.5
+    ],
+    "std": 7.13
+   }
+  },
+  {
+   "case": "overcast",
+   "site": "tonder",
+   "t": "2026-10-19T13:46:00Z",
+   "look": "physical",
+   "file": "captures/sky_real_overcast_physical.png",
+   "source": "forecast",
+   "cloudLowMidHigh": [
+    1,
+    0,
+    0.61
+   ],
+   "visibilityKm": 36.23,
+   "wind850": {
+    "speed": 8.360361952537307,
+    "dirDeg": 85.33799594794776
+   },
+   "sunAltAz": [
+    17.23,
+    220.5
+   ],
+   "sky": {
+    "top": [
+     192.29,
+     190.12,
+     191.35
+    ],
+    "bottom": [
+     166.77,
+     164.86,
+     166.97
+    ],
+    "std": 12.16
+   }
+  },
+  {
+   "case": "overcast",
+   "site": "tonder",
+   "t": "2026-10-19T13:46:00Z",
+   "look": "dusk",
+   "file": "captures/sky_real_overcast_dusk.png",
+   "source": "forecast",
+   "cloudLowMidHigh": [
+    1,
+    0,
+    0.61
+   ],
+   "visibilityKm": 36.23,
+   "wind850": {
+    "speed": 8.360361952537307,
+    "dirDeg": 85.33799594794776
+   },
+   "sunAltAz": [
+    17.23,
+    220.5
+   ],
+   "sky": {
+    "top": [
+     113.39,
+     122.68,
+     147.15
+    ],
+    "bottom": [
+     144.25,
+     125.17,
+     122.69
+    ],
+    "std": 10.19
+   }
+  }
+ ],
+ "S8": {
+  "perQuality": {
+   "low": {
+    "sky.lut": 0,
+    "sky.prepass": 0.068,
+    "scene": 0.009,
+    "grade": 0.017,
+    "present": 0.007,
+    "size": [
+     1088,
+     612
+    ]
+   },
+   "medium": {
+    "sky.lut": 0,
+    "sky.prepass": 0.116,
+    "scene": 0.127,
+    "grade": 0.035,
+    "present": 0.022,
+    "size": [
+     1600,
+     900
+    ]
+   },
+   "high": {
+    "sky.lut": 0,
+    "sky.prepass": 0.426,
+    "scene": 0.128,
+    "grade": 0.037,
+    "present": 0.023,
+    "size": [
+     1600,
+     900
+    ]
+   }
+  },
+  "fx": {
+   "sky.multiScatter": {
+    "0": {
+     "sky.lut": 0,
+     "sky.prepass": 0.117,
+     "scene": 0.127,
+     "grade": 0.035,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "1": {
+     "sky.lut": 0,
+     "sky.prepass": 0.116,
+     "scene": 0.128,
+     "grade": 0.036,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "quality": "medium"
+   },
+   "sky.cloudLightTaps": {
+    "0": {
+     "sky.lut": 0,
+     "sky.prepass": 0.166,
+     "scene": 0.178,
+     "grade": 0.053,
+     "present": 0.035,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "1": {
+     "sky.lut": 0,
+     "sky.prepass": 0.138,
+     "scene": 0.136,
+     "grade": 0.043,
+     "present": 0.027,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "2": {
+     "sky.lut": 0,
+     "sky.prepass": 0.14,
+     "scene": 0.138,
+     "grade": 0.043,
+     "present": 0.028,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "quality": "medium"
+   },
+   "sky.silverLining": {
+    "0": {
+     "sky.lut": 0,
+     "sky.prepass": 0.111,
+     "scene": 0.127,
+     "grade": 0.035,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "1": {
+     "sky.lut": 0,
+     "sky.prepass": 0.116,
+     "scene": 0.127,
+     "grade": 0.035,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "quality": "medium"
+   },
+   "sky.cirrus": {
+    "0": {
+     "sky.lut": 0,
+     "sky.prepass": 0.091,
+     "scene": 0.126,
+     "grade": 0.035,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "1": {
+     "sky.lut": 0,
+     "sky.prepass": 0.117,
+     "scene": 0.125,
+     "grade": 0.035,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "quality": "medium"
+   },
+   "sky.cloudRaymarch": {
+    "0": {
+     "sky.lut": 0,
+     "sky.prepass": 0.22,
+     "scene": 0.119,
+     "grade": 0.039,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "1": {
+     "sky.lut": 0,
+     "sky.prepass": 0.429,
+     "scene": 0.122,
+     "grade": 0.037,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "quality": "high"
+   },
+   "post.grain": {
+    "0": {
+     "sky.lut": 0,
+     "sky.prepass": 0.118,
+     "scene": 0.127,
+     "grade": 0.035,
+     "present": 0.013,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "1": {
+     "sky.lut": 0,
+     "sky.prepass": 0.118,
+     "scene": 0.127,
+     "grade": 0.035,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "quality": "medium"
+   },
+   "post.vignette": {
+    "0": {
+     "sky.lut": 0,
+     "sky.prepass": 0.118,
+     "scene": 0.127,
+     "grade": 0.036,
+     "present": 0.018,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "1": {
+     "sky.lut": 0,
+     "sky.prepass": 0.116,
+     "scene": 0.128,
+     "grade": 0.034,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "quality": "medium"
+   },
+   "post.dither": {
+    "0": {
+     "sky.lut": 0,
+     "sky.prepass": 0.118,
+     "scene": 0.127,
+     "grade": 0.035,
+     "present": 0.018,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "1": {
+     "sky.lut": 0,
+     "sky.prepass": 0.116,
+     "scene": 0.127,
+     "grade": 0.035,
+     "present": 0.022,
+     "size": [
+      1600,
+      900
+     ]
+    },
+    "quality": "medium"
+   }
+  },
+  "lutRebuildMs": {
+   "low": 0.024579999999999998,
+   "medium": 0.0215,
+   "high": 0.31744
+  },
+  "budget": {
+   "low": {
+    "skyMs": 0.068,
+    "skyArcEstMs": 0.306,
+    "skyBudget": 0.6,
+    "gradePresentMs": 0.024,
+    "gradePresentArcEstMs": 0.108,
+    "gradePresentBudget": 0.3,
+    "bgGroundSceneMs": 0.009,
+    "bgGroundArcEstMs": 0.0405,
+    "pass": true
+   },
+   "medium": {
+    "skyMs": 0.116,
+    "skyArcEstMs": 0.522,
+    "skyBudget": 1.3,
+    "gradePresentMs": 0.057,
+    "gradePresentArcEstMs": 0.2565,
+    "gradePresentBudget": 0.6,
+    "bgGroundSceneMs": 0.127,
+    "bgGroundArcEstMs": 0.5715,
+    "pass": true
+   },
+   "high": {
+    "skyMs": 0.426,
+    "skyArcEstMs": 1.917,
+    "skyBudget": 2.5,
+    "gradePresentMs": 0.06,
+    "gradePresentArcEstMs": 0.27,
+    "gradePresentBudget": 0.8,
+    "bgGroundSceneMs": 0.128,
+    "bgGroundArcEstMs": 0.576,
+    "pass": true
+   }
+  },
+  "pass": true
+ }
+}

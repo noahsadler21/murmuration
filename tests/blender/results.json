@@ -1,0 +1,435 @@
+{
+ "date": "2026-10-20T01:29:26.425Z",
+ "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+ "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+ "B5_load": {
+  "starling": [
+   {
+    "name": "starling_real",
+    "verts": 1763,
+    "tris": 1816,
+    "triOK": true,
+    "binBytes": 744304,
+    "spanGlideM": 0.342,
+    "lengthGlideM": 0.188,
+    "maxCycleMotionM": 0.2401,
+    "glideVsBoundMaxM": 0.1378,
+    "errors": [],
+    "pass": true
+   },
+   {
+    "name": "starling_retro",
+    "verts": 484,
+    "tris": 422,
+    "triOK": true,
+    "binBytes": 203876,
+    "spanGlideM": 0.342,
+    "lengthGlideM": 0.188,
+    "maxCycleMotionM": 0.2401,
+    "glideVsBoundMaxM": 0.1378,
+    "errors": [],
+    "pass": true
+   },
+   {
+    "name": "starling_sil",
+    "verts": 46,
+    "tris": 58,
+    "triOK": true,
+    "binBytes": 19484,
+    "spanGlideM": 0.342,
+    "lengthGlideM": 0.188,
+    "maxCycleMotionM": 0.2401,
+    "glideVsBoundMaxM": 0.1378,
+    "errors": [],
+    "pass": true
+   },
+   {
+    "name": "starling_micro",
+    "verts": 20,
+    "tris": 12,
+    "triOK": true,
+    "binBytes": 8392,
+    "spanGlideM": 0.342,
+    "lengthGlideM": 0.188,
+    "maxCycleMotionM": 0.2401,
+    "glideVsBoundMaxM": 0.1378,
+    "errors": [],
+    "pass": true
+   }
+  ],
+  "peregrine": [
+   {
+    "name": "peregrine_real",
+    "clips": [
+     "flap",
+     "flare",
+     "glide",
+     "stoop"
+    ],
+    "bones": 14,
+    "tris": 2732,
+    "triOK": true,
+    "extents": {
+     "flap": {
+      "x": 0.8852,
+      "y": 0.3278,
+      "z": 0.4,
+      "duration": 1,
+      "dbg": "humerusL -0.642,-0.727,0.162,0.179",
+      "tracks": [
+       "body.position",
+       "body.quaternion",
+       "body.scale"
+      ]
+     },
+     "flare": {
+      "x": 0.5663,
+      "y": 0.1873,
+      "z": 0.4094,
+      "duration": 0.5,
+      "dbg": "humerusL -0.780,-0.547,0.301,0.021",
+      "tracks": [
+       "body.position",
+       "body.quaternion",
+       "body.scale"
+      ]
+     },
+     "glide": {
+      "x": 0.9967,
+      "y": 0.1108,
+      "z": 0.4,
+      "duration": 0.5,
+      "dbg": "humerusL -0.668,-0.743,-0.001,0.036",
+      "tracks": [
+       "body.position",
+       "body.quaternion",
+       "body.scale"
+      ]
+     },
+     "stoop": {
+      "x": 0.1404,
+      "y": 0.1108,
+      "z": 0.3999,
+      "duration": 0.5,
+      "dbg": "humerusL 0.878,0.157,-0.451,0.028",
+      "tracks": [
+       "body.position",
+       "body.quaternion",
+       "body.scale"
+      ]
+     }
+    },
+    "errors": [],
+    "pass": true
+   },
+   {
+    "name": "peregrine_retro",
+    "clips": [
+     "flap",
+     "flare",
+     "glide",
+     "stoop"
+    ],
+    "bones": 14,
+    "tris": 486,
+    "triOK": true,
+    "extents": {
+     "flap": {
+      "x": 0.8852,
+      "y": 0.3211,
+      "z": 0.3993,
+      "duration": 1,
+      "dbg": "humerusL -0.642,-0.727,0.162,0.179",
+      "tracks": [
+       "body.position",
+       "body.quaternion",
+       "body.scale"
+      ]
+     },
+     "flare": {
+      "x": 0.5672,
+      "y": 0.1805,
+      "z": 0.4094,
+      "duration": 0.5,
+      "dbg": "humerusL -0.780,-0.547,0.301,0.021",
+      "tracks": [
+       "body.position",
+       "body.quaternion",
+       "body.scale"
+      ]
+     },
+     "glide": {
+      "x": 0.9967,
+      "y": 0.1012,
+      "z": 0.3993,
+      "duration": 0.5,
+      "dbg": "humerusL -0.668,-0.743,-0.001,0.036",
+      "tracks": [
+       "body.position",
+       "body.quaternion",
+       "body.scale"
+      ]
+     },
+     "stoop": {
+      "x": 0.1399,
+      "y": 0.0986,
+      "z": 0.3992,
+      "duration": 0.5,
+      "dbg": "humerusL 0.878,0.157,-0.451,0.028",
+      "tracks": [
+       "body.position",
+       "body.quaternion",
+       "body.scale"
+      ]
+     }
+    },
+    "errors": [],
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "consoleErrors": [],
+ "B1_tail": {
+  "build": {
+   "SPAN": 0.185,
+   "ROOT": [
+    0.009999999776482582,
+    -0.03400000184774399,
+    0.013000000268220901
+   ],
+   "WS": 0.0629,
+   "Y_TIP": -0.10655083507299423,
+   "TAIL_TIP": 0.09844916313886642,
+   "CAP": {
+    "x0": 700,
+    "y0": 300,
+    "x1": 2050,
+    "y1": 640,
+    "scale": 0.75,
+    "dorsal_at": [
+     8,
+     1780
+    ],
+    "ventral_at": [
+     1027,
+     1780
+    ]
+   },
+   "K": 10.9,
+   "version": 3,
+   "Y_FOLDTIP": 0.07540000000000001,
+   "TAIL_Y0": 0.036,
+   "TAIL_Y1": 0.08140000000000001
+  },
+  "glide": {
+   "v2": {
+    "tailTipY": 0.0944,
+    "wingRearmostY_glide": 0.0461,
+    "tailBehindWingtipsCm": 4.83
+   },
+   "v3": {
+    "tailTipY": 0.0814,
+    "wingRearmostY_glide": 0.0461,
+    "tailBehindWingtipsCm": 3.53
+   },
+   "v3_build": {
+    "Y_FOLDTIP": 0.07540000000000001,
+    "TAIL_Y0": 0.036,
+    "TAIL_Y1": 0.08140000000000001
+   }
+  }
+ },
+ "B2_vat_blender": [
+  {
+   "name": "starling_real",
+   "verts": 1763,
+   "tris": 1816,
+   "errMm": {
+    "0": 0.05778670310974121,
+    "16": 0.05875527858734131,
+    "32": 0.060692429542541504,
+    "33": 0.030517578125
+   },
+   "bytes": 744304
+  },
+  {
+   "name": "starling_retro",
+   "verts": 484,
+   "tris": 422,
+   "errMm": {
+    "0": 0.03357231616973877,
+    "16": 0.05151331424713135,
+    "32": 0.05453824996948242,
+    "33": 0.02981722354888916
+   },
+   "bytes": 203876
+  },
+  {
+   "name": "starling_sil",
+   "verts": 46,
+   "tris": 58,
+   "errMm": {
+    "0": 0.0546574592590332,
+    "16": 0.05151331424713135,
+    "32": 0.054076313972473145,
+    "33": 0.026881694793701172
+   },
+   "bytes": 19484
+  },
+  {
+   "name": "starling_micro",
+   "verts": 20,
+   "tris": 12,
+   "errMm": {
+    "0": 0.03357231616973877,
+    "16": 0.05151331424713135,
+    "32": 0.04525482654571533,
+    "33": 0.026881694793701172
+   },
+   "bytes": 8392
+  }
+ ],
+ "B4_falcon": {
+  "rig": {
+   "real": {
+    "tris": 2732,
+    "verts": 1400,
+    "bones": 14,
+    "glide": {
+     "topAreaM2": 0.1372,
+     "topWidthM": 0.995,
+     "extentXYZ": [
+      0.9967,
+      0.4,
+      0.1108
+     ]
+    },
+    "stoop": {
+     "topAreaM2": 0.02877,
+     "topWidthM": 0.14,
+     "extentXYZ": [
+      0.1404,
+      0.3999,
+      0.1108
+     ]
+    },
+    "flare": {
+     "topAreaM2": 0.11312,
+     "topWidthM": 0.566,
+     "extentXYZ": [
+      0.5663,
+      0.4094,
+      0.1873
+     ]
+    },
+    "stoopAreaFracOfGlide": 0.21,
+    "glideSpanM": 0.9967,
+    "lengthM": 0.4,
+    "flareSpanFracOfGlide": 0.568
+   },
+   "retro": {
+    "tris": 486,
+    "verts": 262,
+    "bones": 14,
+    "glide": {
+     "topAreaM2": 0.13664,
+     "topWidthM": 0.995,
+     "extentXYZ": [
+      0.9967,
+      0.3993,
+      0.1012
+     ]
+    },
+    "stoop": {
+     "topAreaM2": 0.02805,
+     "topWidthM": 0.14,
+     "extentXYZ": [
+      0.1399,
+      0.3992,
+      0.0986
+     ]
+    },
+    "flare": {
+     "topAreaM2": 0.11131,
+     "topWidthM": 0.567,
+     "extentXYZ": [
+      0.5672,
+      0.4094,
+      0.1805
+     ]
+    },
+    "stoopAreaFracOfGlide": 0.205,
+    "glideSpanM": 0.9967,
+    "lengthM": 0.3993,
+    "flareSpanFracOfGlide": 0.569
+   }
+  },
+  "plumage_real": {
+   "variant": "real",
+   "res": 2048,
+   "dorsalMeanSRGB": [
+    80.6,
+    84,
+    89.9
+   ],
+   "dorsalSaturation": 0.11,
+   "dorsalLshift": -7.21,
+   "specimenDorsalMeanL": 42.68,
+   "underpartsMeanL": 85.37,
+   "underpartsBarHighpassStdCodes": 17.65,
+   "malarMeanL": 15.25,
+   "underwingMeanL": 69.83,
+   "malarTexels": 7696,
+   "targets": {
+    "slate": [
+     78,
+     84,
+     92
+    ],
+    "cream": [
+     225,
+     220,
+     205
+    ]
+   }
+  },
+  "plumage_retro": {
+   "variant": "retro",
+   "res": 1024,
+   "dorsalMeanSRGB": [
+    80.5,
+    83.9,
+    89.8
+   ],
+   "dorsalSaturation": 0.11,
+   "dorsalLshift": -7.22,
+   "specimenDorsalMeanL": 42.69,
+   "underpartsMeanL": 85.42,
+   "underpartsBarHighpassStdCodes": 17.67,
+   "malarMeanL": 14.68,
+   "underwingMeanL": 69.84,
+   "malarTexels": 1993,
+   "targets": {
+    "slate": [
+     78,
+     84,
+     92
+    ],
+    "cream": [
+     225,
+     220,
+     205
+    ]
+   }
+  }
+ },
+ "pass": {
+  "B1": true,
+  "B2": true,
+  "B3": true,
+  "B4": true,
+  "B5": true,
+  "B6": true
+ }
+}

@@ -1,0 +1,49 @@
+{
+ "framing": {
+  "widthFrac": 0.305,
+  "medianSpanPx": 3.28,
+  "medianDistM": 134.8
+ },
+ "view": {
+  "camPos": [
+   37.3,
+   1.7,
+   16.7
+  ],
+  "pitchDeg": 57.1,
+  "fov": 35
+ },
+ "s6": {
+  "w": 1296,
+  "h": 716,
+  "top": [
+   195.1,
+   196.1,
+   197.1
+  ],
+  "bottom": [
+   194.4,
+   195.4,
+   196.4
+  ],
+  "topMinusBottom": 0.7,
+  "mean": 196.5,
+  "std": 1.83,
+  "bMinusR": [
+   1,
+   4
+  ],
+  "maxChannelSpread": 4,
+  "colStep": 0.11
+ },
+ "pass": {
+  "top": true,
+  "bottom": true,
+  "gradient": false,
+  "bMinusR": true,
+  "spread": true,
+  "std": true,
+  "banding": true
+ },
+ "errors": []
+}

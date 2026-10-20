@@ -1,0 +1,654 @@
+{
+ "date": "2026-10-20T05:33:11.765Z",
+ "perf": {
+  "low": {
+   "birds": 10240,
+   "render": [
+    1280,
+    720
+   ],
+   "msaa": 2,
+   "views": {
+    "default": {
+     "median": 0.504,
+     "p90": 1.4,
+     "cpuMedian": 0.6,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.112,
+      "flock.sim": 0.066,
+      "flock.lodkey": 0.005,
+      "scene": 0.133,
+      "grade": 0.035,
+      "present": 0.011
+     },
+     "lod": [
+      0,
+      0,
+      0,
+      10240
+     ]
+    },
+    "orbit-close": {
+     "median": 0.612,
+     "p90": 1.276,
+     "cpuMedian": 0.5,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.155,
+      "flock.sim": 0.092,
+      "flock.lodkey": 0.006,
+      "scene": 0.276,
+      "grade": 0.052,
+      "present": 0.015
+     },
+     "lod": [
+      0,
+      0,
+      7195,
+      0
+     ]
+    },
+    "inside": {
+     "median": 1.531,
+     "p90": 3.533,
+     "cpuMedian": 0.5,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.216,
+      "flock.sim": 0.103,
+      "flock.lodkey": 0.015,
+      "scene": 0.902,
+      "grade": 0.155,
+      "present": 0.073
+     },
+     "lod": [
+      0,
+      554,
+      2829,
+      0
+     ]
+    },
+    "falcon": {
+     "median": 0.458,
+     "p90": 1.374,
+     "cpuMedian": 0.5,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.05,
+      "flock.sim": 0.057,
+      "flock.lodkey": 0.004,
+      "scene": 0.154,
+      "grade": 0.027,
+      "present": 0.009
+     },
+     "lod": [
+      0,
+      0,
+      268,
+      6378
+     ]
+    }
+   },
+   "frame": {
+    "frames": 300,
+    "p50": 16.7,
+    "p95": 16.9
+   },
+   "ornito": {
+    "median": 1.762,
+    "p90": 3.95,
+    "cpuMedian": 0.4,
+    "perPass": {
+     "sky.lut": 0,
+     "flock.sim": 0.171,
+     "flock.lodkey": 0.049,
+     "scene": 0.964,
+     "grade": 0.17,
+     "trails": 0.292,
+     "present": 0.085
+    }
+   },
+   "ornitoPlus": 1.258,
+   "errors": []
+  },
+  "medium": {
+   "birds": 30720,
+   "render": [
+    1600,
+    900
+   ],
+   "msaa": 4,
+   "views": {
+    "default": {
+     "median": 0.584,
+     "p90": 1.708,
+     "cpuMedian": 0.6,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.117,
+      "flock.sim": 0.145,
+      "flock.lodkey": 0.004,
+      "scene": 0.246,
+      "grade": 0.04,
+      "present": 0.016
+     },
+     "lod": [
+      0,
+      0,
+      0,
+      30720
+     ]
+    },
+    "orbit-close": {
+     "median": 0.938,
+     "p90": 1.307,
+     "cpuMedian": 0.5,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.161,
+      "flock.sim": 0.205,
+      "flock.lodkey": 0.005,
+      "scene": 0.484,
+      "grade": 0.056,
+      "present": 0.023
+     },
+     "lod": [
+      0,
+      0,
+      22666,
+      0
+     ]
+    },
+    "inside": {
+     "median": 0.862,
+     "p90": 1.2,
+     "cpuMedian": 0.5,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.099,
+      "flock.sim": 0.171,
+      "flock.lodkey": 0.004,
+      "scene": 0.534,
+      "grade": 0.044,
+      "present": 0.018
+     },
+     "lod": [
+      21,
+      3000,
+      8210,
+      0
+     ]
+    },
+    "falcon": {
+     "median": 0.616,
+     "p90": 1.527,
+     "cpuMedian": 0.5,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.056,
+      "flock.sim": 0.151,
+      "flock.lodkey": 0.004,
+      "scene": 0.35,
+      "grade": 0.036,
+      "present": 0.016
+     },
+     "lod": [
+      0,
+      0,
+      11059,
+      14998
+     ]
+    }
+   },
+   "frame": {
+    "frames": 300,
+    "p50": 16.7,
+    "p95": 16.9
+   },
+   "ornito": {
+    "median": 0.692,
+    "p90": 5.462,
+    "cpuMedian": 0.5,
+    "perPass": {
+     "sky.lut": 0,
+     "flock.sim": 0.163,
+     "flock.lodkey": 0.004,
+     "scene": 0.422,
+     "grade": 0.042,
+     "trails": 0.046,
+     "present": 0.018
+    }
+   },
+   "ornitoPlus": 0.108,
+   "errors": []
+  },
+  "high": {
+   "birds": 81920,
+   "render": [
+    1600,
+    900
+   ],
+   "msaa": 4,
+   "views": {
+    "default": {
+     "median": 1.097,
+     "p90": 1.333,
+     "cpuMedian": 0.6,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.224,
+      "flock.sim": 0.361,
+      "flock.lodkey": 0.004,
+      "scene": 0.441,
+      "grade": 0.042,
+      "present": 0.017
+     },
+     "lod": [
+      0,
+      0,
+      0,
+      81912
+     ]
+    },
+    "orbit-close": {
+     "median": 1.457,
+     "p90": 1.739,
+     "cpuMedian": 0.5,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.229,
+      "flock.sim": 0.368,
+      "flock.lodkey": 0.005,
+      "scene": 0.785,
+      "grade": 0.046,
+      "present": 0.019
+     },
+     "lod": [
+      0,
+      0,
+      57576,
+      0
+     ]
+    },
+    "inside": {
+     "median": 1.316,
+     "p90": 1.83,
+     "cpuMedian": 0.5,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.163,
+      "flock.sim": 0.375,
+      "flock.lodkey": 0.004,
+      "scene": 0.709,
+      "grade": 0.042,
+      "present": 0.018
+     },
+     "lod": [
+      64,
+      5905,
+      9405,
+      0
+     ]
+    },
+    "falcon": {
+     "median": 1.06,
+     "p90": 1.329,
+     "cpuMedian": 0.4,
+     "perPass": {
+      "sky.lut": 0,
+      "sky.prepass": 0.091,
+      "flock.sim": 0.367,
+      "flock.lodkey": 0.004,
+      "scene": 0.538,
+      "grade": 0.039,
+      "present": 0.017
+     },
+     "lod": [
+      0,
+      0,
+      4830,
+      68132
+     ]
+    }
+   },
+   "frame": {
+    "frames": 300,
+    "p50": 16.7,
+    "p95": 16.9
+   },
+   "ornito": {
+    "median": 2.712,
+    "p90": 3.526,
+    "cpuMedian": 0.5,
+    "perPass": {
+     "sky.lut": 0,
+     "flock.sim": 0.887,
+     "flock.lodkey": 0.007,
+     "scene": 1.591,
+     "grade": 0.092,
+     "trails": 0.087,
+     "present": 0.038
+    }
+   },
+   "ornitoPlus": 1.615,
+   "errors": []
+  }
+ },
+ "fx": {
+  "sky.multiScatter@default": {
+   "view": "default",
+   "on": 1,
+   "off": 0.973,
+   "delta": 0.027,
+   "rounds": [
+    -0.003,
+    -0.001,
+    0.027,
+    0.391
+   ]
+  },
+  "sky.cloudRaymarch@default": {
+   "view": "default",
+   "on": 0.728,
+   "off": 0.601,
+   "delta": 0.127,
+   "rounds": [
+    0.119,
+    0.129,
+    0.127,
+    0.125
+   ]
+  },
+  "sky.silverLining@default": {
+   "view": "default",
+   "on": 0.592,
+   "off": 0.586,
+   "delta": 0.006,
+   "rounds": [
+    0.008,
+    0.008,
+    0.006,
+    0.008
+   ]
+  },
+  "sky.cirrus@default": {
+   "view": "default",
+   "on": 0.594,
+   "off": 0.575,
+   "delta": 0.019,
+   "rounds": [
+    0.023,
+    0.021,
+    0.019,
+    0.022
+   ]
+  },
+  "sky.cloudLightTaps@default": {
+   "view": "default",
+   "on": 0.606,
+   "off": 0.609,
+   "delta": -0.003,
+   "rounds": [
+    0.028,
+    0.003,
+    -0.003,
+    0.002
+   ]
+  },
+  "flock.lod0@default": {
+   "view": "default",
+   "on": 0.605,
+   "off": 0.607,
+   "delta": -0.002,
+   "rounds": [
+    -0.002,
+    -0.001,
+    -0.002,
+    -0.004
+   ]
+  },
+  "flock.iridescence@default": {
+   "view": "default",
+   "on": 0.604,
+   "off": 0.604,
+   "delta": 0,
+   "rounds": [
+    -0.002,
+    -0.002,
+    0,
+    -0.002
+   ]
+  },
+  "flock.wingTransmit@default": {
+   "view": "default",
+   "on": 0.602,
+   "off": 0.603,
+   "delta": -0.001,
+   "rounds": [
+    0.035,
+    -0.001,
+    -0.001,
+    -0.002
+   ]
+  },
+  "flock.selfShadow@default": {
+   "view": "default",
+   "on": 0.617,
+   "off": 0.605,
+   "delta": 0.012,
+   "rounds": [
+    0.007,
+    0.011,
+    0.012,
+    0.014
+   ]
+  },
+  "flock.aerial@default": {
+   "view": "default",
+   "on": 0.621,
+   "off": 0.626,
+   "delta": -0.005,
+   "rounds": [
+    -0.041,
+    -0.012,
+    -0.005,
+    -0.003
+   ]
+  },
+  "flock.minPixel@default": {
+   "view": "default",
+   "on": 0.628,
+   "off": 0.629,
+   "delta": -0.001,
+   "rounds": [
+    -0.003,
+    0,
+    -0.001,
+    -0.004
+   ]
+  },
+  "flock.normalMapLOD0@default": {
+   "view": "default",
+   "on": 0.62,
+   "off": 0.623,
+   "delta": -0.003,
+   "rounds": [
+    -0.004,
+    -0.001,
+    -0.003,
+    0.001
+   ]
+  },
+  "falcon.real@default": {
+   "view": "default",
+   "on": 0.611,
+   "off": 0.608,
+   "delta": 0.003,
+   "rounds": [
+    0.001,
+    0.003,
+    0.003,
+    0.003
+   ]
+  },
+  "post.grain@default": {
+   "view": "default",
+   "on": 0.62,
+   "off": 0.609,
+   "delta": 0.011,
+   "rounds": [
+    0.007,
+    0.005,
+    0.011,
+    0.009
+   ]
+  },
+  "post.vignette@default": {
+   "view": "default",
+   "on": 0.614,
+   "off": 0.604,
+   "delta": 0.01,
+   "rounds": [
+    0.007,
+    0.011,
+    0.01,
+    0.004
+   ]
+  },
+  "post.dither@default": {
+   "view": "default",
+   "on": 0.639,
+   "off": 0.635,
+   "delta": 0.004,
+   "rounds": [
+    0.005,
+    0.005,
+    0.004,
+    0.005
+   ]
+  },
+  "flock.lod0@inside": {
+   "view": "inside",
+   "on": 0.846,
+   "off": 0.811,
+   "delta": 0.035,
+   "rounds": [
+    0.004,
+    -0.001,
+    0.035,
+    -0.005
+   ]
+  },
+  "flock.iridescence@inside": {
+   "view": "inside",
+   "on": 0.785,
+   "off": 0.807,
+   "delta": -0.022,
+   "rounds": [
+    0.002,
+    0.018,
+    -0.022,
+    -0.005
+   ]
+  },
+  "flock.wingTransmit@inside": {
+   "view": "inside",
+   "on": 0.798,
+   "off": 0.783,
+   "delta": 0.015,
+   "rounds": [
+    0.004,
+    0.021,
+    0.015,
+    0.013
+   ]
+  },
+  "flock.selfShadow@inside": {
+   "view": "inside",
+   "on": 0.76,
+   "off": 0.8,
+   "delta": -0.04,
+   "rounds": [
+    0.005,
+    0.011,
+    -0.04,
+    0.033
+   ]
+  },
+  "flock.aerial@inside": {
+   "view": "inside",
+   "on": 0.818,
+   "off": 0.81,
+   "delta": 0.008,
+   "rounds": [
+    -0.008,
+    0.01,
+    0.008,
+    0.008
+   ]
+  },
+  "flock.minPixel@inside": {
+   "view": "inside",
+   "on": 0.802,
+   "off": 0.802,
+   "delta": 0,
+   "rounds": [
+    0.002,
+    0.032,
+    0,
+    0.003
+   ]
+  },
+  "flock.normalMapLOD0@inside": {
+   "view": "inside",
+   "on": 0.762,
+   "off": 0.761,
+   "delta": 0.001,
+   "rounds": [
+    0.021,
+    0.01,
+    0.001,
+    0.003
+   ]
+  },
+  "falcon.real@falcon-side": {
+   "view": "falcon-side",
+   "on": 0.462,
+   "off": 0.464,
+   "delta": -0.002,
+   "rounds": [
+    -0.001,
+    -0.002,
+    -0.002,
+    0
+   ]
+  },
+  "msaa 4 vs 0": {
+   "view": "default",
+   "on": [
+    0.65,
+    0.653
+   ],
+   "off": [
+    0.548,
+    0.547
+   ],
+   "delta": 0.104
+  },
+  "scale 1 vs 0.75": {
+   "view": "default",
+   "on": [
+    0.643,
+    0.936
+   ],
+   "off": [
+    0.453,
+    0.501
+   ],
+   "delta": 0.313
+  },
+  "errors": []
+ },
+ "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+}

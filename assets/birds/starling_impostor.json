@@ -1,0 +1,52 @@
+{
+ "format": "murm-impostor-1",
+ "name": "starling_impostor",
+ "source": "starling_retro (v3), blender/s9_impostor.py",
+ "cellPx": 48,
+ "orthoM": 0.42,
+ "cols": 18,
+ "rows": 24,
+ "poses": [
+  "cycle 0.0000",
+  "cycle 0.0625",
+  "cycle 0.1250",
+  "cycle 0.1875",
+  "cycle 0.2500",
+  "cycle 0.3125",
+  "cycle 0.3750",
+  "cycle 0.4375",
+  "cycle 0.5000",
+  "cycle 0.5625",
+  "cycle 0.6250",
+  "cycle 0.6875",
+  "cycle 0.7500",
+  "cycle 0.8125",
+  "cycle 0.8750",
+  "cycle 0.9375",
+  "glide",
+  "bound"
+ ],
+ "cycleFrames": 16,
+ "colGlide": 16,
+ "colBound": 17,
+ "elevationsDeg": [
+  -60,
+  -25,
+  15
+ ],
+ "azimuthsDeg": [
+  0,
+  45,
+  90,
+  135,
+  180,
+  225,
+  270,
+  315
+ ],
+ "rowIndex": "row = elevationIndex * 8 + azimuthIndex",
+ "viewFrame": "direction from the bird to the camera in the glTF bird frame (+Z head, +Y back, +X left wing); az from +Z toward +X, el toward +Y",
+ "alpha": "straight, = coverage",
+ "color": "sRGB, retro albedo, flat overcast light",
+ "note": "optional; SPEC 4.6 uses starling_micro (min-pixel mesh) for LOD3"
+}

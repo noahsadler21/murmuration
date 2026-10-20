@@ -1,0 +1,325 @@
+{
+ "date": "2026-10-20T00:45:37.945Z",
+ "trails": {
+  "renderPx": [
+   1600,
+   900
+  ],
+  "dpr": 1.25,
+  "T1": {
+   "stamps": 400,
+   "frames": 400,
+   "camBitIdentical": true,
+   "indicatorLast": {
+    "done": 400,
+    "frames": 400,
+    "finished": true
+   },
+   "afterEndPlan": {
+    "steps": 0,
+    "dt": 0.016666666666666666,
+    "stamp": false
+   },
+   "pass": true
+  },
+  "T2flock": {
+   "singleFrameMin": 37.333333333333336,
+   "accMin": 37.333333333333336,
+   "diff": 0,
+   "lighterThanPlatePx": 0,
+   "pixels": 1440000,
+   "changedFrac": 0.18575694444444443,
+   "darkerFrac": 0.18575694444444443,
+   "lighterFrac": 0,
+   "maxDiff": 159,
+   "softFrac": 0,
+   "pass": true
+  },
+  "T5": {
+   "filename": "ornitography_brighton_20251120-1605_400f_240fps.png",
+   "width": 1600,
+   "height": 900,
+   "maxDiffVsPresented": 0,
+   "blobBytes": 477847,
+   "pass": true
+  },
+  "T3": {
+   "plateMean": 61,
+   "maxBrightening": 159,
+   "darkerThanPlatePx": 0,
+   "pass": true
+  },
+  "T2one": {
+   "pxPerStamp": 9.180193467628566,
+   "singleFrameMin": 56.666666666666664,
+   "stampsSampled": 25,
+   "stampMinRange": [
+    37.333333333333336,
+    37.333333333333336
+   ],
+   "accMin": 37.333333333333336,
+   "worstSurvivalCodes": 0,
+   "peakLagPx": 165,
+   "peakStamps": 17.97347741981988,
+   "acNorm": 0.9666671080805477,
+   "pass": true
+  },
+  "T4": {
+   "decay": 0.02,
+   "rows": [
+    {
+     "k": 5,
+     "measured": 142.67,
+     "expected": 142.52,
+     "err": 0.15
+    },
+    {
+     "k": 15,
+     "measured": 116.67,
+     "expected": 116.45,
+     "err": 0.22
+    },
+    {
+     "k": 30,
+     "measured": 86,
+     "expected": 86,
+     "err": 0
+    }
+   ],
+   "pixel": {
+    "plate": 195,
+    "bird": 37.333333333333336,
+    "contrast0": 157.66666666666666
+   },
+   "pass": true
+  },
+  "T6": {
+   "selection": [
+    3,
+    11,
+    19,
+    27,
+    35,
+    43
+   ],
+   "checkedPx": 23205,
+   "leakedPx": 0,
+   "pass": true
+  },
+  "T8": {
+   "renderPx": [
+    1600,
+    900
+   ],
+   "timerQuery": true,
+   "decay0": {
+    "gpuMs": 0.020744533333333332,
+    "wallMsFinish": 0.015
+   },
+   "decay002": {
+    "gpuMs": 0.033405866666666666,
+    "wallMsFinish": 0.013
+   },
+   "budgetMediumMs": 0.6,
+   "pass": true
+  },
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "seconds": 2.251,
+  "consoleErrors": []
+ },
+ "ui": {
+  "missingIds": [],
+  "missingSel": [],
+  "lookLabels": [
+   "Signature (pale overcast)",
+   "Physical",
+   "Dusk"
+  ],
+  "presetSynced": true,
+  "clockState": 10,
+  "ornitoPanelShown": true,
+  "shutterMid": {
+   "text": "40 / 1500.625 s bird time",
+   "offset": "55.29",
+   "open": true
+  },
+  "shutterDone": {
+   "text": "150 / 1500.625 s bird time",
+   "offset": "0.00",
+   "exportEnabled": true
+  },
+  "ariaPressed": {
+   "look": "true",
+   "cam": "true"
+  },
+  "events": [],
+  "eventCount": 50,
+  "creditsVerbatim": true,
+  "creditLinks": {
+   "peregrine": true,
+   "openMeteo": true
+  },
+  "pass": true,
+  "contrast": {
+   "signature": {
+    "min": 5.17,
+    "worst": [
+     {
+      "text": "cam",
+      "id": "bar",
+      "cr": 5.17
+     },
+     {
+      "text": "quality",
+      "id": "bar",
+      "cr": 5.17
+     },
+     {
+      "text": "60 fps",
+      "id": "fps",
+      "cr": 5.17
+     },
+     {
+      "text": "cam",
+      "id": "bar",
+      "cr": 5.17
+     }
+    ]
+   },
+   "physical": {
+    "min": 4.91,
+    "worst": [
+     {
+      "text": "cam",
+      "id": "bar",
+      "cr": 4.91
+     },
+     {
+      "text": "quality",
+      "id": "bar",
+      "cr": 4.91
+     },
+     {
+      "text": "60 fps",
+      "id": "fps",
+      "cr": 4.91
+     },
+     {
+      "text": "cam",
+      "id": "bar",
+      "cr": 4.91
+     }
+    ]
+   },
+   "dusk": {
+    "min": 4.66,
+    "worst": [
+     {
+      "text": "cam",
+      "id": "bar",
+      "cr": 4.66
+     },
+     {
+      "text": "quality",
+      "id": "bar",
+      "cr": 4.66
+     },
+     {
+      "text": "60 fps",
+      "id": "fps",
+      "cr": 4.66
+     },
+     {
+      "text": "cam",
+      "id": "bar",
+      "cr": 4.66
+     }
+    ]
+   }
+  },
+  "layoutDesktop": {
+   "vw": 1280,
+   "scrollW": 1280,
+   "bodyScrollW": 1280,
+   "overflow": [],
+   "overCentre": []
+  },
+  "layoutPhone": {
+   "vw": 375,
+   "scrollW": 375,
+   "bodyScrollW": 375,
+   "overflow": [],
+   "overCentre": []
+  },
+  "phoneQualityDefault": "low",
+  "layoutPhoneNoise": {
+   "vw": 375,
+   "scrollW": 375,
+   "bodyScrollW": 375,
+   "overflow": [],
+   "overCentre": [
+    "noisePanel"
+   ]
+  },
+  "layoutPhoneOrnito": {
+   "vw": 375,
+   "scrollW": 375,
+   "bodyScrollW": 375,
+   "overflow": [],
+   "overCentre": [
+    "noisePanel"
+   ]
+  },
+  "contrastPhoneDusk": {
+   "min": 4.66,
+   "worst": [
+    {
+     "text": "60 fps",
+     "id": "fps",
+     "cr": 4.66
+    },
+    {
+     "text": "Brighton West Pier, UK · Thu",
+     "id": "title",
+     "cr": 5.85
+    },
+    {
+     "text": "flight-path randomness",
+     "id": "noisePanel",
+     "cr": 5.86
+    },
+    {
+     "text": "preset",
+     "id": "noisePanel",
+     "cr": 5.88
+    },
+    {
+     "text": "curl",
+     "id": "noisePanel",
+     "cr": 5.88
+    }
+   ],
+   "count": 43
+  },
+  "layoutPhoneOrnitoPanel": {
+   "vw": 375,
+   "scrollW": 375,
+   "bodyScrollW": 375,
+   "overflow": [],
+   "overCentre": [
+    "ornitoPanel"
+   ]
+  },
+  "phoneFoldedWhileRunning": true,
+  "layoutPhoneRunning": {
+   "vw": 375,
+   "scrollW": 375,
+   "bodyScrollW": 375,
+   "overflow": [],
+   "overCentre": []
+  },
+  "consoleErrors": [],
+  "contrastMin": 4.66,
+  "T7pass": true
+ }
+}

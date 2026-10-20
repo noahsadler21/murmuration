@@ -1,0 +1,64 @@
+{
+ "format": "murm-vat-1",
+ "name": "starling_real",
+ "lod": 0,
+ "verts": 1763,
+ "tris": 1816,
+ "rows": 34,
+ "cycleFrames": 32,
+ "rowGlide": 32,
+ "rowBound": 33,
+ "wingbeatHz": 13.3,
+ "downstroke": 0.57,
+ "spanM": 0.39,
+ "lengthM": 0.205,
+ "frame": "glTF +Z head, +Y back, +X left wing, metres",
+ "bbox": [
+  -0.17874,
+  -0.08956,
+  -0.09745,
+  0.1978,
+  0.15806,
+  0.10655
+ ],
+ "buffers": {
+  "index": {
+   "offset": 0,
+   "count": 5448
+  },
+  "uv": {
+   "offset": 10896,
+   "count": 3526
+  },
+  "vatPos": {
+   "offset": 25000,
+   "count": 239768
+  },
+  "vatNrm": {
+   "offset": 504536,
+   "count": 239768
+  }
+ },
+ "textures": {
+  "albedo": "starling_real_albedo.png",
+  "mask": "starling_real_mask.png",
+  "normal": "starling_real_normal.png"
+ },
+ "albedoLinear": {
+  "body": [
+   0.1297,
+   0.099,
+   0.0779
+  ],
+  "wing": [
+   0.1278,
+   0.0942,
+   0.0725
+  ]
+ },
+ "measured": {
+  "spanGlideM": 0.342,
+  "lengthGlideM": 0.188
+ },
+ "source": "blender/s8_vat.py from models/blend/s5_rigged.blend (2026-10-19 20:46)"
+}

@@ -1,0 +1,150 @@
+{
+ "build": "20261020T055818Z-6af2b633",
+ "files": [
+  {
+   "path": "birds/CREDITS.json",
+   "bytes": 326,
+   "sha1": "15ee734181d99c0688d18fa5d3c05bf2a7179336"
+  },
+  {
+   "path": "birds/peregrine_real.glb",
+   "bytes": 6070568,
+   "sha1": "5d5163b09aa05c0733243a1e42258a11c019816e"
+  },
+  {
+   "path": "birds/peregrine_retro.glb",
+   "bytes": 865964,
+   "sha1": "95ad10ccd46632ce25341e062fe33f641b2f090f"
+  },
+  {
+   "path": "birds/starling_impostor.json",
+   "bytes": 1091,
+   "sha1": "10cd6c3d2b334c4d90c5d49cbff97ee90fc67080"
+  },
+  {
+   "path": "birds/starling_impostor.png",
+   "bytes": 338885,
+   "sha1": "748f5076546d3d18376b7c9afc2ee533adedde9a"
+  },
+  {
+   "path": "birds/starling_micro.bin",
+   "bytes": 8392,
+   "sha1": "6cb6cb13ed601979d69121cd07e9864ffbed249c"
+  },
+  {
+   "path": "birds/starling_micro.json",
+   "bytes": 1001,
+   "sha1": "6fa96e3a3f166cc265725c42b808590ec799afe3"
+  },
+  {
+   "path": "birds/starling_real.bin",
+   "bytes": 744304,
+   "sha1": "7085e47949858853e8296bd34e537d1ee421ab90"
+  },
+  {
+   "path": "birds/starling_real.json",
+   "bytes": 1082,
+   "sha1": "1a42fb5c33dda4954a67fe9032d1721c7b75aaa0"
+  },
+  {
+   "path": "birds/starling_real_albedo.png",
+   "bytes": 3302913,
+   "sha1": "b88c550dd42eb4a583d7fa85a85797cde2ebb204"
+  },
+  {
+   "path": "birds/starling_real_mask.png",
+   "bytes": 2656959,
+   "sha1": "f84a188fbb4434ad4d1b2b6e9af96f0951851efa"
+  },
+  {
+   "path": "birds/starling_real_normal.png",
+   "bytes": 3307624,
+   "sha1": "a390492b86380b8bec86030548a9851a545c3cd7"
+  },
+  {
+   "path": "birds/starling_retro.bin",
+   "bytes": 203876,
+   "sha1": "78ecb06e3af23ee5eb979eced732fdb0b21aacc3"
+  },
+  {
+   "path": "birds/starling_retro.json",
+   "bytes": 1056,
+   "sha1": "d92ee4c4092e33cad981b3f1426664559d54bfbb"
+  },
+  {
+   "path": "birds/starling_retro_albedo.png",
+   "bytes": 923637,
+   "sha1": "b00428c7532e06b34d0a78b7e79838e78569cf37"
+  },
+  {
+   "path": "birds/starling_retro_mask.png",
+   "bytes": 768839,
+   "sha1": "61b6b3e9c754728b4d5eab650ff5aa429f937931"
+  },
+  {
+   "path": "birds/starling_sil.bin",
+   "bytes": 19484,
+   "sha1": "8aba331bb50906c1ecfbe57d7a77e3bc5f0cdcea"
+  },
+  {
+   "path": "birds/starling_sil.json",
+   "bytes": 1000,
+   "sha1": "c6e090690ea24a58c967668b48ed16919a837291"
+  },
+  {
+   "path": "js/flock.js",
+   "bytes": 81024,
+   "sha1": "047b343a1fad931dd8a583dfaba5ae7663f61e7c"
+  },
+  {
+   "path": "js/flock_shaders.js",
+   "bytes": 38802,
+   "sha1": "3c7f5dd030772255e9d33d13c48b560b76fb28f5"
+  },
+  {
+   "path": "js/main.js",
+   "bytes": 47614,
+   "sha1": "dc43f34c6c4465911f207e21492f483d7bc4ed8c"
+  },
+  {
+   "path": "js/sky.js",
+   "bytes": 39221,
+   "sha1": "b6d10f6eb1130d5407e39f7d84548c941a0ec119"
+  },
+  {
+   "path": "js/sky_shaders.js",
+   "bytes": 58695,
+   "sha1": "0b427cf6890639650744312b7aad02c7c00e34c2"
+  },
+  {
+   "path": "js/state.js",
+   "bytes": 5841,
+   "sha1": "21c809c3dd366ebb5483a23087f9b19ffe8769b1"
+  },
+  {
+   "path": "js/trails.js",
+   "bytes": 16170,
+   "sha1": "883a19f0a9759ebcd74273d10c80c30398fa5899"
+  },
+  {
+   "path": "js/ui.js",
+   "bytes": 19974,
+   "sha1": "ae0da99c36752e8486031f708ed89705e551b2f0"
+  },
+  {
+   "path": "js/weather.js",
+   "bytes": 25294,
+   "sha1": "a1e6495289fd8240db9a2c5463601d51bfa79d8a"
+  },
+  {
+   "path": "weather/sample_clear.json",
+   "bytes": 8681,
+   "sha1": "97ad0a2cae07c12502e75e2cacfb2a48cfac99cd"
+  },
+  {
+   "path": "weather/sample_overcast.json",
+   "bytes": 9077,
+   "sha1": "720be0844f6715607128164f0449fe4723f4f8ba"
+  }
+ ]
+}

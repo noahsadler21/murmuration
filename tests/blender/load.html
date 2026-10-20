@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bird asset load test</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { --bg: #c4c5c6; --fg: #1d1e20; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #log { position: fixed; left: 8px; bottom: 8px; white-space: pre; font: 11px ui-monospace, monospace; opacity: .75; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="log"></div>
+<script type="module">
+// B2 / B3 / B5 (SPEC 9): the murm-vat-1 starling LODs and the peregrine GLBs, loaded with three r170.
+// window.runTests() -> results object; window.ready = true once the module has loaded.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const BASE = '../../assets/birds/';
+const TRI = { starling_real: [1700, 1900], starling_retro: [380, 430], starling_sil: [40, 64], starling_micro: [0, 12],
+              peregrine_real: [2500, 3500], peregrine_retro: [450, 700] };
+const log = (...a) => { document.getElementById('log').textContent += a.join(' ') + '\n'; };
+
+function half(h) {
+  const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 0x1f, f = h & 0x3ff;
+  if (e === 0) return s * Math.pow(2, -14) * (f / 1024);
+  if (e === 31) return f ? NaN : s * Infinity;
+  return s * Math.pow(2, e - 15) * (1 + f / 1024);
+}
+
+async function loadVAT(name) {
+  const js = await (await fetch(BASE + name + '.json')).json();
+  const bin = await (await fetch(BASE + name + '.bin')).arrayBuffer();
+  const b = js.buffers, V = js.verts, R = js.rows;
+  const errs = [];
+  const need = ['format', 'name', 'lod', 'verts', 'tris', 'rows', 'cycleFrames', 'rowGlide', 'rowBound', 'wingbeatHz', 'downstroke',
+    'spanM', 'lengthM', 'frame', 'bbox', 'buffers', 'textures', 'albedoLinear'];
+  for (const k of need) if (!(k in js)) errs.push('missing ' + k);
+  if (js.format !== 'murm-vat-1') errs.push('format');
+  if (R !== 34 || js.cycleFrames !== 32 || js.rowGlide !== 32 || js.rowBound !== 33) errs.push('rows');
+  if (V > 4096) errs.push('verts > 4096');
+  for (const k of ['index', 'uv', 'vatPos', 'vatNrm']) if (b[k].offset % 4) errs.push(k + ' not 4-aligned');
+  if (b.index.count !== js.tris * 3) errs.push('index count');
+  if (b.uv.count !== V * 2) errs.push('uv count');
+  if (b.vatPos.count !== R * V * 4) errs.push('vatPos count');
+  if (b.vatNrm.count !== R * V * 4) errs.push('vatNrm count');
+  const end = b.vatNrm.offset + b.vatNrm.count;
+  const expectLen = end + ((4 - end % 4) % 4);
+  if (bin.byteLength !== expectLen) errs.push(`bin length ${bin.byteLength} != ${expectLen}`);
+  const index = new Uint16Array(bin, b.index.offset, b.index.count);
+  const uv = new Float32Array(bin, b.uv.offset, b.uv.count);
+  const pos16 = new Uint16Array(bin, b.vatPos.offset, b.vatPos.count);
+  const nrm = new Uint8Array(bin, b.vatNrm.offset, b.vatNrm.count);
+  let maxIdx = 0; for (const i of index) maxIdx = Math.max(maxIdx, i);
+  if (maxIdx >= V) errs.push('index out of range');
+  for (const t of ['albedo', 'mask', 'normal']) if (js.textures[t]) { const r = await fetch(BASE + js.textures[t], { method: 'HEAD' }); if (!r.ok) errs.push('texture ' + t + ' missing'); }
+  // decode rows; span in the glide row, motion between cycle rows (the VAT animates)
+  const row = r => { const a = new Float32Array(V * 4); for (let i = 0; i < V * 4; i++) a[i] = half(pos16[r * V * 4 + i]); return a; };
+  const g = row(32), r0 = row(0), r16 = row(16), rb = row(33);
+  let xmin = 1e9, xmax = -1e9, zmin = 1e9, zmax = -1e9, nan = 0;
+  for (let v = 0; v < V; v++) { const x = g[v * 4], z = g[v * 4 + 2]; if (!isFinite(x)) nan++; xmin = Math.min(xmin, x); xmax = Math.max(xmax, x); zmin = Math.min(zmin, z); zmax = Math.max(zmax, z); }
+  let move = 0, moveB = 0;
+  for (let v = 0; v < V; v++) {
+    move = Math.max(move, Math.hypot(r0[v * 4] - r16[v * 4], r0[v * 4 + 1] - r16[v * 4 + 1], r0[v * 4 + 2] - r16[v * 4 + 2]));
+    moveB = Math.max(moveB, Math.hypot(g[v * 4] - rb[v * 4], g[v * 4 + 1] - rb[v * 4 + 1], g[v * 4 + 2] - rb[v * 4 + 2]));
+  }
+  let nbad = 0; for (let i = 0; i < V * 4; i += 4) { const nx = nrm[i] / 127.5 - 1, ny = nrm[i + 1] / 127.5 - 1, nz = nrm[i + 2] / 127.5 - 1; const l = Math.hypot(nx, ny, nz); if (l < 0.9 || l > 1.1) nbad++; }
+  if (nan) errs.push('NaN positions');
+  if (nbad) errs.push(nbad + ' bad normals');
+  if (move < 0.05) errs.push('cycle rows 0/16 do not differ');
+  const [lo, hi] = TRI[name];
+  const triOK = js.tris >= lo && js.tris <= hi;
+  return { js, index, uv, pos16, nrm, res: { name, verts: V, tris: js.tris, triOK, binBytes: bin.byteLength, spanGlideM: +(xmax - xmin).toFixed(4),
+    lengthGlideM: +(zmax - zmin).toFixed(4), maxCycleMotionM: +move.toFixed(4), glideVsBoundMaxM: +moveB.toFixed(4), errors: errs, pass: !errs.length && triOK } };
+}
+
+// minimal VAT material (the real one is the flock builder's): lerp two cycle rows, mix to glide
+function vatMesh(d, tex) {
+  const V = d.js.verts;
+  const g = new THREE.InstancedBufferGeometry();
+  const vid = new Float32Array(V); for (let i = 0; i < V; i++) vid[i] = i;
+  g.setAttribute('aVid', new THREE.BufferAttribute(vid, 1));
+  g.setAttribute('uv', new THREE.BufferAttribute(d.uv, 2));
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(V * 3), 3));
+  g.setIndex(new THREE.BufferAttribute(d.index, 1));
+  const N = 6, off = new Float32Array(N * 4);
+  for (let i = 0; i < N; i++) { off[i * 4] = (i - (N - 1) / 2) * 0.5; off[i * 4 + 1] = 0; off[i * 4 + 2] = 0; off[i * 4 + 3] = i / N; }
+  g.setAttribute('aOff', new THREE.InstancedBufferAttribute(off, 4));
+  g.instanceCount = N;
+  const pt = new THREE.DataTexture(d.pos16, V, 34, THREE.RGBAFormat, THREE.HalfFloatType); pt.needsUpdate = true;
+  const nt = new THREE.DataTexture(d.nrm, V, 34, THREE.RGBAFormat, THREE.UnsignedByteType); nt.needsUpdate = true;
+  const m = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    uniforms: { uPos: { value: pt }, uNrm: { value: nt }, uMap: { value: tex }, uT: { value: 0 }, uHz: { value: 1.0 }, uFlat: { value: tex ? 0 : 1 },
+                uCol: { value: new THREE.Color().fromArray(d.js.albedoLinear.body) } },
+    vertexShader: `precision highp float; precision highp sampler2D;
+      uniform sampler2D uPos, uNrm; uniform float uT, uHz; attribute float aVid; attribute vec4 aOff; varying vec2 vUv; varying vec3 vN;
+      void main(){ float ph = fract(uT*uHz + aOff.w); float r = ph*32.0; float r0 = floor(r); float f = r - r0; float r1 = mod(r0+1.0, 32.0);
+        int x = int(aVid);
+        vec3 p = mix(texelFetch(uPos, ivec2(x, int(r0)), 0).xyz, texelFetch(uPos, ivec2(x, int(r1)), 0).xyz, f);
+        vec3 n = mix(texelFetch(uNrm, ivec2(x, int(r0)), 0).xyz, texelFetch(uNrm, ivec2(x, int(r1)), 0).xyz, f)*2.0-1.0;
+        if (aOff.w > 0.8) { p = texelFetch(uPos, ivec2(x, 32), 0).xyz; n = texelFetch(uNrm, ivec2(x, 32), 0).xyz*2.0-1.0; }
+        vUv = uv; vN = normalize(n);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p + aOff.xyz, 1.0); }`,
+    fragmentShader: `precision highp float; uniform sampler2D uMap; uniform float uFlat; uniform vec3 uCol; varying vec2 vUv; varying vec3 vN;
+      void main(){ vec3 a = uFlat > 0.5 ? uCol : texture2D(uMap, vUv).rgb; float l = 0.55 + 0.45*abs(vN.y);
+        gl_FragColor = vec4(a*l, 1.0);
+#include <colorspace_fragment>
+      }`
+  });
+  return new THREE.Mesh(g, m);
+}
+
+async function loadFalcon(name, loader) {
+  const gltf = await loader.loadAsync(BASE + name + '.glb');
+  const errs = [];
+  const clips = gltf.animations.map(a => a.name);
+  for (const c of ['flap', 'glide', 'stoop', 'flare']) if (!clips.includes(c)) errs.push('clip ' + c + ' missing');
+  let skinned = null, rigName = null;
+  gltf.scene.traverse(o => { if (o.isSkinnedMesh) skinned = o; if (o.name === 'peregrine_rig') rigName = o.name; });
+  if (!skinned) errs.push('no SkinnedMesh');
+  const bones = skinned ? skinned.skeleton.bones.length : 0;
+  if (bones > 14) errs.push('bones ' + bones);
+  if (!rigName) errs.push('armature node peregrine_rig missing');
+  const tris = skinned ? skinned.geometry.index.count / 3 : 0;
+  const [lo, hi] = TRI[name];
+  // pose each clip, skin the vertices on the CPU (SkinnedMesh.applyBoneTransform), measure extents
+  const mixer = new THREE.AnimationMixer(gltf.scene);
+  const measure = {};
+  const v = new THREE.Vector3();
+  for (const clip of gltf.animations) {
+    mixer.stopAllAction();
+    const act = mixer.clipAction(clip); act.reset().play();
+    mixer.setTime(clip.name === 'flap' ? 0.0 : 0.1);
+    gltf.scene.updateMatrixWorld(true);
+    skinned.skeleton.update();
+    const P = skinned.geometry.attributes.position;
+    const box = new THREE.Box3();
+    for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); skinned.applyBoneTransform(i, v); box.expandByPoint(v); }
+    const s = box.getSize(new THREE.Vector3());
+    const hb = skinned.skeleton.bones.find(b => /humerus/.test(b.name));
+    measure[clip.name] = { x: +s.x.toFixed(4), y: +s.y.toFixed(4), z: +s.z.toFixed(4), duration: +clip.duration.toFixed(3),
+      dbg: hb ? hb.name + ' ' + hb.quaternion.toArray().map(q => q.toFixed(3)).join(',') : 'nobone', tracks: clip.tracks.slice(0, 3).map(t => t.name) };
+  }
+  mixer.stopAllAction();
+  const triOK = tris >= lo && tris <= hi;
+  const g = measure.glide || {};
+  if (!(g.x >= 0.95 && g.x <= 1.10)) errs.push('glide span ' + g.x);
+  if (!(g.z >= 0.38 && g.z <= 0.46)) errs.push('length ' + g.z);
+  if (!(measure.stoop && measure.stoop.x <= 0.16)) errs.push('stoop width');
+  return { gltf, skinned, mixer, res: { name, clips, bones, tris, triOK, extents: measure, errors: errs, pass: !errs.length && triOK } };
+}
+
+window.runTests = async () => {
+  const out = { starling: [], peregrine: [] };
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(devicePixelRatio);
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setClearColor(0xc4c5c6);
+  document.body.prepend(renderer.domElement);
+  const scene = new THREE.Scene();
+  const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 50);
+  cam.position.set(0.0, -0.35, 5.2); cam.lookAt(0, 0.25, 0);
+  scene.add(new THREE.HemisphereLight(0xe8ecf2, 0x6a6660, 2.2));
+  const sunL = new THREE.DirectionalLight(0xffffff, 1.4); sunL.position.set(-1, 2, 2); scene.add(sunL);
+  const tl = new THREE.TextureLoader();
+  const vats = [];
+  let row = 0;
+  for (const n of ['starling_real', 'starling_retro', 'starling_sil', 'starling_micro']) {
+    const d = await loadVAT(n);
+    out.starling.push(d.res); log(n, JSON.stringify(d.res));
+    let tex = null;
+    if (d.js.textures.albedo) { tex = await tl.loadAsync(BASE + d.js.textures.albedo); tex.colorSpace = THREE.SRGBColorSpace; tex.flipY = false; }
+    const m = vatMesh(d, tex);
+    m.position.set(0, 1.25 - row * 0.42, 0); m.rotation.x = 0.5;
+    scene.add(m); vats.push(m); row++;
+  }
+  const loader = new GLTFLoader();
+  let col = 0;
+  for (const n of ['peregrine_real', 'peregrine_retro']) {
+    const f = await loadFalcon(n, loader);
+    out.peregrine.push(f.res); log(n, JSON.stringify(f.res));
+    const g = f.gltf.scene;
+    g.position.set(-1.2 + col * 2.4, -0.55, 0); g.rotation.set(0.9, 0, 0);
+    scene.add(g);
+    const clip = f.gltf.animations.find(a => a.name === 'flap');
+    const a = f.mixer.clipAction(clip); a.timeScale = 4.5; a.play();
+    f.mixer.setTime(0.07);
+    col++;
+    out['mixer_' + n] = f.mixer;
+  }
+  // animate a few frames, then capture
+  const t0 = performance.now();
+  await new Promise(res => {
+    let k = 0;
+    const tick = () => {
+      const t = (performance.now() - t0) / 1000;
+      for (const m of vats) m.material.uniforms.uT.value = t * 0.35;
+      renderer.render(scene, cam);
+      if (++k < 30) requestAnimationFrame(tick); else res();
+    };
+    tick();
+  });
+  delete out.mixer_peregrine_real; delete out.mixer_peregrine_retro;
+  out.pass = out.starling.every(r => r.pass) && out.peregrine.every(r => r.pass);
+  window.capture = () => renderer.domElement.toDataURL('image/png');
+  return out;
+};
+window.ready = true;
+</script>
+</body>
+</html>

@@ -1,0 +1,904 @@
+{
+ "date": "2026-10-20T01:23:14.691Z",
+ "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+ "F1": {
+  "at3s": 0.9939,
+  "at10s": 0.9782,
+  "pass": false
+ },
+ "F2": {
+  "samples30to90s": {
+   "calm": [
+    0.993,
+    0.946,
+    0.991,
+    0.995,
+    0.982,
+    0.988,
+    0.994
+   ],
+   "agitated": [
+    0.992,
+    0.988,
+    0.99,
+    0.991,
+    0.995,
+    0.994,
+    0.984
+   ],
+   "swirling": [
+    0.906,
+    0.671,
+    0.933,
+    0.973,
+    0.97,
+    0.967,
+    0.964
+   ]
+  },
+  "median": {
+   "calm": 0.991,
+   "agitated": 0.991,
+   "swirling": 0.964
+  },
+  "pass": false
+ },
+ "F3": {
+  "airSpeed": {
+   "calm": {
+    "p01": 11.1,
+    "median": 12.73,
+    "p99": 13.87
+   },
+   "agitated": {
+    "p01": 10.43,
+    "median": 12.77,
+    "p99": 14.86
+   },
+   "swirling": {
+    "p01": 9.99,
+    "median": 12.55,
+    "p99": 15.21
+   }
+  },
+  "pass": true
+ },
+ "F4": {
+  "low": [
+   {
+    "xi": 20.16,
+    "L": 91.94,
+    "ratio": 0.219
+   },
+   {
+    "xi": 15.17,
+    "L": 74.21,
+    "ratio": 0.204
+   },
+   {
+    "xi": 11.48,
+    "L": 56.34,
+    "ratio": 0.204
+   }
+  ],
+  "medium": [
+   {
+    "xi": 45.39,
+    "L": 118.94,
+    "ratio": 0.382
+   },
+   {
+    "xi": 64.82,
+    "L": 196.82,
+    "ratio": 0.329
+   },
+   {
+    "xi": 55.94,
+    "L": 177.73,
+    "ratio": 0.315
+   }
+  ],
+  "pass": false
+ },
+ "F5": {
+  "waveDelay_0.07": {
+   "speed": 10.58,
+   "thickness": 5.45,
+   "excitedAtEnd": 385,
+   "curve": [
+    [
+     0.5,
+     140,
+     5.21
+    ],
+    [
+     1,
+     601,
+     10.59
+    ],
+    [
+     1.5,
+     873,
+     15.83
+    ],
+    [
+     2,
+     1137,
+     20.45
+    ],
+    [
+     2.5,
+     1324,
+     26.84
+    ],
+    [
+     3,
+     1443,
+     32.79
+    ],
+    [
+     3.5,
+     1373,
+     38.64
+    ],
+    [
+     4,
+     1331,
+     46.17
+    ],
+    [
+     4.5,
+     1427,
+     53.59
+    ],
+    [
+     5,
+     1744,
+     59.39
+    ],
+    [
+     5.5,
+     2953,
+     62.61
+    ],
+    [
+     6,
+     5477,
+     65.48
+    ],
+    [
+     6.5,
+     7098,
+     68.67
+    ],
+    [
+     7,
+     5283,
+     72.52
+    ],
+    [
+     7.5,
+     2463,
+     76.83
+    ],
+    [
+     8,
+     1584,
+     80.02
+    ],
+    [
+     8.5,
+     2106,
+     57.6
+    ],
+    [
+     9,
+     7541,
+     61.76
+    ],
+    [
+     9.5,
+     10362,
+     65.65
+    ],
+    [
+     10,
+     8128,
+     69.86
+    ],
+    [
+     10.5,
+     4301,
+     71.41
+    ],
+    [
+     11,
+     1551,
+     10.87
+    ],
+    [
+     11.5,
+     385,
+     10.23
+    ],
+    [
+     12,
+     385,
+     17.73
+    ]
+   ]
+  },
+  "waveDelay_0.04": {
+   "speed": 12.66,
+   "thickness": 12.96,
+   "excitedAtEnd": 0,
+   "curve": [
+    [
+     0.5,
+     53,
+     10.76
+    ],
+    [
+     1,
+     340,
+     17.54
+    ],
+    [
+     1.5,
+     371,
+     26.29
+    ],
+    [
+     2,
+     673,
+     29.8
+    ],
+    [
+     2.5,
+     3307,
+     36.48
+    ],
+    [
+     3,
+     4599,
+     46.42
+    ],
+    [
+     3.5,
+     9675,
+     53.77
+    ],
+    [
+     4,
+     9061,
+     63.84
+    ],
+    [
+     4.5,
+     3079,
+     45.74
+    ],
+    [
+     5,
+     1878,
+     52.49
+    ],
+    [
+     5.5,
+     999,
+     0
+    ],
+    [
+     6,
+     0,
+     0
+    ],
+    [
+     6.5,
+     0,
+     0
+    ],
+    [
+     7,
+     0,
+     0
+    ],
+    [
+     7.5,
+     0,
+     0
+    ],
+    [
+     8,
+     0,
+     0
+    ],
+    [
+     8.5,
+     0,
+     0
+    ],
+    [
+     9,
+     0,
+     0
+    ],
+    [
+     9.5,
+     0,
+     0
+    ],
+    [
+     10,
+     0,
+     0
+    ],
+    [
+     10.5,
+     0,
+     0
+    ],
+    [
+     11,
+     0,
+     0
+    ],
+    [
+     11.5,
+     0,
+     0
+    ],
+    [
+     12,
+     0,
+     0
+    ]
+   ]
+  },
+  "passDefault": false,
+  "passRecommended": false
+ },
+ "F6": {
+  "worstAltFrac": 1,
+  "worstHorFrac": 1,
+  "samples": [
+   {
+    "t": 50,
+    "alt": 1,
+    "hor": 1,
+    "maxH": 418
+   },
+   {
+    "t": 100,
+    "alt": 1,
+    "hor": 1,
+    "maxH": 175
+   },
+   {
+    "t": 150,
+    "alt": 1,
+    "hor": 1,
+    "maxH": 400
+   },
+   {
+    "t": 200,
+    "alt": 1,
+    "hor": 1,
+    "maxH": 251
+   },
+   {
+    "t": 250,
+    "alt": 1,
+    "hor": 1,
+    "maxH": 172
+   },
+   {
+    "t": 300,
+    "alt": 1,
+    "hor": 1,
+    "maxH": 328
+   }
+  ],
+  "pass": true
+ },
+ "F7": {
+  "flap": 0.696,
+  "glide": 0.209,
+  "bound": 0.095,
+  "pass": true
+ },
+ "F8": {
+  "states": [
+   "select@15.02",
+   "stoop@15.60",
+   "strike@22.22",
+   "pullout@22.38",
+   "climb@22.90",
+   "patrol@60.80"
+  ],
+  "strike": {
+   "minBirdDist": 22.53,
+   "birdsWithin4m": 0,
+   "targetDist": 2.53,
+   "speed": 45
+  },
+  "peak": 45,
+  "excitedMax": 0.058823529411764705,
+  "waves": 1,
+  "log": [
+   "patrol@0",
+   "select@15",
+   "stoop@15.58",
+   "strike@22.2",
+   "pullout@22.37",
+   "climb@22.88",
+   "patrol@60.78"
+  ],
+  "falconAsset": "real,retro",
+  "pass": true
+ },
+ "F9": {
+  "default": {
+   "lod": [
+    0,
+    0,
+    0,
+    30720
+   ],
+   "inFrustum": 30720,
+   "drawn": 30720,
+   "capsOK": true
+  },
+  "orbit-close": {
+   "lod": [
+    0,
+    0,
+    28105,
+    2171
+   ],
+   "inFrustum": 30276,
+   "drawn": 30276,
+   "capsOK": true
+  },
+  "near": {
+   "lod": [
+    0,
+    0,
+    0,
+    30720
+   ],
+   "inFrustum": 30720,
+   "drawn": 30720,
+   "capsOK": true
+  },
+  "inside": {
+   "lod": [
+    0,
+    2286,
+    8414,
+    0
+   ],
+   "inFrustum": 10700,
+   "drawn": 10700,
+   "capsOK": true
+  },
+  "pass": true
+ },
+ "F10": {
+  "bird": 18445,
+  "lodAt1p4m": [
+   15,
+   125,
+   0,
+   0
+  ],
+  "pass": true
+ },
+ "F12": {
+  "default": {
+   "sky": 193,
+   "birdPx": 608,
+   "min": 110.3,
+   "p5": 140.7,
+   "p50": 157.3,
+   "p95": 167
+  },
+  "near": {
+   "sky": 195,
+   "birdPx": 28233,
+   "min": 40,
+   "p5": 130.3,
+   "p50": 165,
+   "p95": 166
+  },
+  "note": "stand-in grade (tests/flock); final values depend on Sky's Grade and light bag",
+  "pass": false
+ },
+ "F11": {
+  "date": "2026-10-20T01:21:12.268Z",
+  "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "perf": {
+   "low": {
+    "default": {
+     "gpu": {
+      "median": 0.143,
+      "p90": 1.142,
+      "perPass": {
+       "flock.sim": 0.071,
+       "flock.lodkey": 0.004,
+       "scene": 0.056,
+       "grade": 0.011
+      }
+     },
+     "cpu": {
+      "median": 0.1,
+      "p90": 0.2,
+      "bucketMs": 0
+     },
+     "px": [
+      1088,
+      612
+     ],
+     "birds": 10240,
+     "lod": [
+      0,
+      0,
+      0,
+      10240
+     ],
+     "tris": 122880
+    },
+    "near": {
+     "gpu": {
+      "median": 0.139,
+      "p90": 1.232,
+      "perPass": {
+       "flock.sim": 0.06,
+       "flock.lodkey": 0.004,
+       "scene": 0.056,
+       "grade": 0.01
+      }
+     },
+     "cpu": {
+      "median": 0.1,
+      "p90": 0.2,
+      "bucketMs": 0.1
+     },
+     "px": [
+      1088,
+      612
+     ],
+     "birds": 10240,
+     "lod": [
+      0,
+      0,
+      0,
+      10240
+     ],
+     "tris": 122880
+    },
+    "inside": {
+     "gpu": {
+      "median": 0.134,
+      "p90": 0.613,
+      "perPass": {
+       "flock.sim": 0.06,
+       "flock.lodkey": 0.004,
+       "scene": 0.051,
+       "grade": 0.01
+      }
+     },
+     "cpu": {
+      "median": 0.1,
+      "p90": 0.2,
+      "bucketMs": 0.1
+     },
+     "px": [
+      1088,
+      612
+     ],
+     "birds": 10240,
+     "lod": [
+      0,
+      206,
+      6168,
+      0
+     ],
+     "tris": 444676
+    }
+   },
+   "medium": {
+    "default": {
+     "gpu": {
+      "median": 0.402,
+      "p90": 0.678,
+      "perPass": {
+       "flock.sim": 0.157,
+       "flock.lodkey": 0.004,
+       "scene": 0.225,
+       "grade": 0.016
+      }
+     },
+     "cpu": {
+      "median": 0.1,
+      "p90": 0.2,
+      "bucketMs": 0
+     },
+     "px": [
+      1600,
+      900
+     ],
+     "birds": 30720,
+     "lod": [
+      0,
+      0,
+      0,
+      30720
+     ],
+     "tris": 368640
+    },
+    "near": {
+     "gpu": {
+      "median": 0.434,
+      "p90": 0.721,
+      "perPass": {
+       "flock.sim": 0.155,
+       "flock.lodkey": 0.004,
+       "scene": 0.257,
+       "grade": 0.017
+      }
+     },
+     "cpu": {
+      "median": 0.1,
+      "p90": 0.2,
+      "bucketMs": 0.4
+     },
+     "px": [
+      1600,
+      900
+     ],
+     "birds": 30720,
+     "lod": [
+      0,
+      0,
+      0,
+      30720
+     ],
+     "tris": 368640
+    },
+    "inside": {
+     "gpu": {
+      "median": 0.416,
+      "p90": 0.636,
+      "perPass": {
+       "flock.sim": 0.157,
+       "flock.lodkey": 0.004,
+       "scene": 0.24,
+       "grade": 0.017
+      }
+     },
+     "cpu": {
+      "median": 0.1,
+      "p90": 0.2,
+      "bucketMs": 1.9
+     },
+     "px": [
+      1600,
+      900
+     ],
+     "birds": 30720,
+     "lod": [
+      24,
+      1014,
+      14897,
+      0
+     ],
+     "tris": 1335518
+    }
+   },
+   "high": {
+    "default": {
+     "gpu": {
+      "median": 0.771,
+      "p90": 1.513,
+      "perPass": {
+       "flock.sim": 0.391,
+       "flock.lodkey": 0.003,
+       "scene": 0.351,
+       "grade": 0.022
+      }
+     },
+     "cpu": {
+      "median": 0.1,
+      "p90": 0.3,
+      "bucketMs": 1.1
+     },
+     "px": [
+      1600,
+      900
+     ],
+     "birds": 81920,
+     "lod": [
+      0,
+      0,
+      0,
+      81920
+     ],
+     "tris": 983040
+    },
+    "near": {
+     "gpu": {
+      "median": 0.859,
+      "p90": 1.452,
+      "perPass": {
+       "flock.sim": 0.414,
+       "flock.lodkey": 0.004,
+       "scene": 0.422,
+       "grade": 0.018
+      }
+     },
+     "cpu": {
+      "median": 0.1,
+      "p90": 0.2,
+      "bucketMs": 0.4
+     },
+     "px": [
+      1600,
+      900
+     ],
+     "birds": 81920,
+     "lod": [
+      0,
+      0,
+      0,
+      81920
+     ],
+     "tris": 983040
+    },
+    "inside": {
+     "gpu": {
+      "median": 0.771,
+      "p90": 1.239,
+      "perPass": {
+       "flock.sim": 0.414,
+       "flock.lodkey": 0.004,
+       "scene": 0.331,
+       "grade": 0.019
+      }
+     },
+     "cpu": {
+      "median": 0.1,
+      "p90": 0.2,
+      "bucketMs": 1.6
+     },
+     "px": [
+      1600,
+      900
+     ],
+     "birds": 81920,
+     "lod": [
+      0,
+      2053,
+      12297,
+      0
+     ],
+     "tris": 1579592
+    }
+   }
+  },
+  "fx": {
+   "low": {
+    "flock.iridescence": {
+     "on": 0.109,
+     "off": 0.131,
+     "delta": -0.022
+    },
+    "flock.wingTransmit": {
+     "on": 0.138,
+     "off": 0.138,
+     "delta": 0
+    },
+    "flock.selfShadow": {
+     "on": 0.138,
+     "off": 0.056,
+     "delta": 0.082
+    },
+    "flock.aerial": {
+     "on": 0.134,
+     "off": 0.139,
+     "delta": -0.005
+    },
+    "flock.minPixel": {
+     "on": 0.131,
+     "off": 0.11,
+     "delta": 0.021
+    },
+    "flock.lod0": {
+     "on": 0.118,
+     "off": 0.124,
+     "delta": -0.006
+    },
+    "flock.normalMapLOD0": {
+     "on": 0.115,
+     "off": 0.142,
+     "delta": -0.027
+    }
+   },
+   "medium": {
+    "flock.iridescence": {
+     "on": 0.25,
+     "off": 0.379,
+     "delta": -0.129
+    },
+    "flock.wingTransmit": {
+     "on": 0.416,
+     "off": 0.252,
+     "delta": 0.164
+    },
+    "flock.selfShadow": {
+     "on": 0.403,
+     "off": 0.404,
+     "delta": -0.001
+    },
+    "flock.aerial": {
+     "on": 0.387,
+     "off": 0.453,
+     "delta": -0.066
+    },
+    "flock.minPixel": {
+     "on": 0.421,
+     "off": 0.404,
+     "delta": 0.017
+    },
+    "flock.lod0": {
+     "on": 0.255,
+     "off": 0.25,
+     "delta": 0.005
+    },
+    "flock.normalMapLOD0": {
+     "on": 0.412,
+     "off": 0.392,
+     "delta": 0.02
+    }
+   },
+   "high": {
+    "flock.iridescence": {
+     "on": 0.353,
+     "off": 0.434,
+     "delta": -0.081
+    },
+    "flock.wingTransmit": {
+     "on": 0.331,
+     "off": 0.377,
+     "delta": -0.046
+    },
+    "flock.selfShadow": {
+     "on": 0.43,
+     "off": 0.423,
+     "delta": 0.007
+    },
+    "flock.aerial": {
+     "on": 0.451,
+     "off": 0.438,
+     "delta": 0.013
+    },
+    "flock.minPixel": {
+     "on": 0.441,
+     "off": 0.452,
+     "delta": -0.011
+    },
+    "flock.lod0": {
+     "on": 0.366,
+     "off": 0.436,
+     "delta": -0.07
+    },
+    "flock.normalMapLOD0": {
+     "on": 0.438,
+     "off": 0.359,
+     "delta": 0.079
+    }
+   }
+  }
+ },
+ "consoleErrors": []
+}

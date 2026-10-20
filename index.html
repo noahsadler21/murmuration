@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Murmuration</title>
+<link rel="icon" href="data:,">
+<meta name="description" content="A starling murmuration under real weather, with an Ornitography mode. Build 20261020T055818Z-6af2b633">
+<style>
+:root {
+  --panel: rgba(250,250,251,0.62);
+  --panel-solid: rgba(250,250,251,0.86);
+  --line: rgba(30,32,36,0.10);
+  --ink: #1d1e20;
+  --dim: rgba(29,30,32,0.78);     /* SPEC says 0.62; 0.78 is needed for 4.5:1 over the darkest backdrop (ground, dusk) */
+  --accent: #2f3a4a;
+  --red: #c8352b;
+  --gutter: 16px;
+  --r: 10px;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #c3c4c5; color: var(--ink);
+  font: 12.5px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased; }
+#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; outline: none; }
+.ui { position: fixed; z-index: 2; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+  -webkit-backdrop-filter: blur(14px) saturate(0.7) brightness(1.18); backdrop-filter: blur(14px) saturate(0.7) brightness(1.18); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .panel { background: var(--panel-solid); } }
+.hidden { display: none !important; }
+
+/* top-left: title + weather readout */
+#hud { top: var(--gutter); left: var(--gutter); max-width: min(340px, calc(100vw - 2 * var(--gutter))); padding: 10px 12px 9px; }
+#title { margin: 0 0 6px; font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
+#title .sub { display: block; font-weight: 400; color: var(--dim); font-size: 12px; margin-top: 1px; }
+#readout { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12px; }
+#readout dt { color: var(--dim); }
+#readout dd { margin: 0; }
+.arrow { display: inline-block; width: 1em; text-align: center; transform-origin: 50% 55%; }
+.badge { display: inline-block; padding: 0 7px; border-radius: 999px; border: 1px solid var(--line); font-size: 11px; line-height: 17px;
+  background: rgba(255,255,255,0.55); color: var(--accent); }
+.badge[data-src="sample"] { color: #7a3a14; }
+#hudToggle { display: none; }
+
+/* bottom bar */
+#bar { left: 50%; transform: translateX(-50%); bottom: var(--gutter); width: max-content; max-width: calc(100vw - 2 * var(--gutter));
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 5px 6px; }
+.brow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 3px 4px; }
+.brow + .brow { padding-top: 3px; border-top: 1px solid var(--line); }
+.grp { display: flex; gap: 2px; align-items: center; }
+.grp + .grp { margin-left: 4px; padding-left: 7px; border-left: 1px solid var(--line); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+button, select, input { font: inherit; color: var(--ink); }
+button { appearance: none; border: 1px solid transparent; background: transparent; padding: 4px 9px; border-radius: 7px;
+  cursor: pointer; white-space: nowrap; line-height: 18px; }
+button:hover { background: rgba(255,255,255,0.55); border-color: var(--line); }
+button[aria-pressed="true"] { background: var(--accent); color: #f6f7f8; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.solid { border-color: var(--line); background: rgba(255,255,255,0.5); }
+button:disabled { opacity: 0.45; cursor: default; }
+#fps { min-width: 52px; text-align: right; color: var(--dim); font-size: 11.5px; padding: 0 4px; }
+.lbl { color: var(--dim); font-size: 11px; padding: 0 4px 0 2px; text-transform: lowercase; }
+
+/* popover panels: bottom-left above the bar; ornito panel bottom-right */
+.pop { left: var(--gutter); bottom: calc(var(--gutter) + var(--barH, 70px) + 10px); width: 300px; max-width: calc(100vw - 2 * var(--gutter));
+  padding: 10px 12px 12px; max-height: calc(100vh - var(--barH, 70px) - 3 * var(--gutter) - 10px); overflow: auto; }
+#ornitoPanel { left: auto; right: var(--gutter); width: 284px; }
+.pop h2 { font-size: 12px; margin: 0 0 8px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
+.pop h2 small { font-weight: 400; color: var(--dim); margin-left: auto; }
+.fold { padding: 0 7px; line-height: 16px; border-color: var(--line); background: rgba(255,255,255,0.5); }
+#ornitoPanel.folded #ofBody, #ornitoPanel.folded .note { display: none; }
+#ornitoPanel.folded h2 { margin-bottom: 0; }
+#ornitoPanel.folded .obtns { margin-top: 8px; }
+.btns.obtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.obtns #ofStart { grid-column: 1 / -1; }
+.row { display: grid; grid-template-columns: 92px 1fr 44px; align-items: center; gap: 8px; margin: 5px 0; }
+.row.two { grid-template-columns: 92px 1fr; }
+.row label { color: var(--dim); }
+.row output { text-align: right; font-size: 11.5px; }
+input[type=range] { width: 100%; accent-color: var(--accent); height: 18px; margin: 0; }
+select, input[type=number], input[type=date], input[type=time] { width: 100%; padding: 3px 6px; border-radius: 6px;
+  border: 1px solid rgba(30,32,36,0.16); background: rgba(255,255,255,0.7); min-height: 26px; }
+input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.btns button { border-color: var(--line); background: rgba(255,255,255,0.5); }
+.btns button.primary { background: var(--accent); color: #f6f7f8; }
+.btns button.primary.rec { background: var(--red); border-color: var(--red); }
+.note { color: var(--dim); font-size: 11px; margin: 8px 0 0; }
+
+/* shutter indicator, top-right */
+#shutter { top: var(--gutter); right: var(--gutter); display: flex; align-items: center; gap: 10px; padding: 7px 12px 7px 8px; }
+#shutter svg { width: 30px; height: 30px; display: block; }
+#shutter .ring-bg { stroke: rgba(30,32,36,0.14); }
+#shutter .ring { stroke: var(--red); transition: stroke-dashoffset 0.06s linear; }
+#shutter .dot { fill: rgba(200,53,43,0.35); }
+#shutter.open .dot { fill: var(--red); animation: blink 1s steps(2, start) infinite; }
+#shutter.done .ring { stroke: var(--accent); }
+#shutter.done .dot { fill: var(--accent); }
+#shutter .count { font-size: 13px; font-weight: 600; }
+#shutter .exp { color: var(--dim); font-size: 11px; display: block; font-weight: 400; }
+@keyframes blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { #shutter.open .dot { animation: none; } }
+
+#credits { width: 380px; }
+#credits ul { margin: 0; padding: 0 0 0 16px; }
+#credits li { margin: 3px 0; }
+#credits a { color: var(--accent); }
+#credits .refs { font-size: 11px; color: var(--dim); margin-top: 8px; }
+#credits .refs li { margin: 1px 0; }
+
+#status { position: fixed; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, 40px); color: var(--dim);
+  font-size: 12px; letter-spacing: 0.04em; pointer-events: none; transition: opacity 0.6s; }
+#status.gone { opacity: 0; }
+#status.err { color: #7a1d16; transform: translate(-50%, -50%); background: var(--panel-solid); padding: 12px 16px;
+  border-radius: var(--r); border: 1px solid var(--line); pointer-events: auto; }
+
+/* phone / narrow */
+@media (max-width: 720px) {
+  #bar { left: var(--gutter); right: var(--gutter); width: auto; transform: none; padding: 4px; }
+  .brow { justify-content: flex-start; gap: 2px 0; }
+  .grp { flex-wrap: wrap; }
+  .grp + .grp { margin-left: 6px; padding-left: 0; border-left: 0; }
+  button { padding: 3px 7px; }
+  .long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #hud { right: var(--gutter); max-width: none; padding: 7px 10px; }
+  #title { margin: 0; }
+  #hud.open #title { margin-bottom: 6px; }
+  #hud #readout { display: none; }
+  #hud.open #readout { display: grid; }
+  #hudToggle { display: inline-block; float: right; padding: 1px 8px; margin: 1px -2px 0 8px; border-color: var(--line); background: rgba(255,255,255,0.5); }
+  /* popovers sit between the HUD and the bar; the ornito panel stacks just above the bar so the sky stays visible */
+  .pop { left: var(--gutter); right: var(--gutter); width: auto; top: calc(var(--gutter) + var(--hudH, 52px) + 8px); bottom: auto;
+    max-height: calc(100vh - var(--hudH, 52px) - var(--barH, 120px) - 4 * var(--gutter)); }
+  #ornitoPanel { left: var(--gutter); right: var(--gutter); width: auto; top: auto; bottom: calc(var(--gutter) + var(--barH, 120px) + 8px); }
+  body.pop-open #ornitoPanel { display: none; }
+  #ornitoPanel .row { margin: 3px 0; }
+  #shutter { top: auto; right: var(--gutter); bottom: calc(var(--gutter) + var(--barH, 120px) + var(--ornH, 0px) + 16px); padding: 5px 10px 5px 6px; }
+  body.pop-open #shutter:not(.open) { display: none; }
+  body.pop-open #shutter { bottom: calc(var(--gutter) + var(--barH, 120px) + 8px); }
+  .lbl { display: none; }
+}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c" tabindex="0" aria-label="Starling murmuration"></canvas>
+<div id="status" role="status">loading sky and weather…</div>
+
+<section id="hud" class="ui panel" aria-label="Place and weather">
+  <button id="hudToggle" type="button" aria-expanded="false" aria-controls="readout" title="Weather details">Weather</button>
+  <h1 id="title">Murmuration<span class="sub">—</span></h1>
+  <dl id="readout">
+    <dt>cloud</dt><dd data-r="cloud">—</dd>
+    <dt>wind 10 m</dt><dd data-r="w10">—</dd>
+    <dt>wind 80 m</dt><dd data-r="w80">—</dd>
+    <dt>air</dt><dd data-r="air">—</dd>
+    <dt>sun</dt><dd data-r="sun">—</dd>
+    <dt>source</dt><dd><span class="badge" data-r="src" data-src="none">loading</span></dd>
+  </dl>
+</section>
+
+<div id="shutter" class="ui panel hidden" role="status" aria-live="off" aria-label="Shutter">
+  <svg viewBox="0 0 30 30" aria-hidden="true">
+    <circle class="ring-bg" cx="15" cy="15" r="12" fill="none" stroke-width="2.5"/>
+    <circle class="ring" cx="15" cy="15" r="12" fill="none" stroke-width="2.5" stroke-linecap="round"
+      stroke-dasharray="75.40" stroke-dashoffset="75.40" transform="rotate(-90 15 15)"/>
+    <circle class="dot" cx="15" cy="15" r="5"/>
+  </svg>
+  <span class="count"><span data-s="done">0</span> / <span data-s="frames">150</span><span class="exp" data-s="exp">0.63 s bird time</span></span>
+</div>
+
+<nav id="bar" class="ui panel" aria-label="Controls">
+ <div class="brow">
+  <div class="grp" role="group" aria-label="Mode">
+    <button type="button" data-mode="live" aria-pressed="true" title="Live (O)">Live</button>
+    <button type="button" data-mode="ornito" aria-pressed="false" title="Ornitography (O)">Ornitography</button>
+  </div>
+  <div class="grp" role="group" aria-label="Look">
+    <button type="button" data-look="signature" aria-pressed="true" title="1">Signature<span class="long"> (pale overcast)</span></button>
+    <button type="button" data-look="physical" aria-pressed="false" title="2">Physical</button>
+    <button type="button" data-look="dusk" aria-pressed="false" title="3">Dusk</button>
+  </div>
+  <div class="grp" role="group" aria-label="Camera">
+    <span class="lbl">cam</span>
+    <button type="button" data-cam="watcher" aria-pressed="true" title="Camera (C)">Watcher</button>
+    <button type="button" data-cam="orbit" aria-pressed="false" title="Camera (C)">Orbit</button>
+    <button type="button" data-cam="falcon" aria-pressed="false" title="Camera (C)">Falcon</button>
+  </div>
+ </div>
+ <div class="brow">
+  <div class="grp" role="group" aria-label="Predator and wind">
+    <button type="button" id="falconToggle" aria-pressed="true" title="Peregrine on/off">Peregrine</button>
+    <button type="button" id="attackBtn" title="Attack (F)">Attack</button>
+    <button type="button" id="gustBtn" title="Gust (G)">Gust</button>
+  </div>
+  <div class="grp" role="group" aria-label="Panels">
+    <button type="button" id="noiseBtn" aria-pressed="false" aria-controls="noisePanel">Noise</button>
+    <button type="button" id="placeBtn" aria-pressed="false" aria-controls="placePanel">Place<span class="long"> &amp; time</span></button>
+    <button type="button" id="creditsBtn" aria-pressed="false" aria-controls="credits">Credits</button>
+  </div>
+  <div class="grp" role="group" aria-label="Quality">
+    <span class="lbl">quality</span>
+    <button type="button" data-q="low" aria-pressed="false">Low</button>
+    <button type="button" data-q="medium" aria-pressed="true">Med</button>
+    <button type="button" data-q="high" aria-pressed="false">High</button>
+    <span id="fps" aria-label="frames per second">— fps</span>
+  </div>
+ </div>
+</nav>
+
+<section id="noisePanel" class="ui panel pop hidden" aria-label="Noise inputs">
+  <h2>Noise inputs <small>flight-path randomness</small></h2>
+  <div class="row two"><label for="nzPreset">preset</label>
+    <select id="nzPreset"><option value="calm">Calm</option><option value="swirling">Swirling</option><option value="agitated">Agitated</option><option value="pulsing">Pulsing</option></select></div>
+  <div class="row"><label for="nzCurl">curl</label><input id="nzCurl" type="range" min="0" max="4" step="0.05"><output for="nzCurl"></output></div>
+  <div class="row"><label for="nzScale">scale</label><input id="nzScale" type="range" min="0.1" max="2" step="0.05"><output for="nzScale"></output></div>
+  <div class="row"><label for="nzOct">octaves</label><input id="nzOct" type="range" min="1" max="5" step="1"><output for="nzOct"></output></div>
+  <div class="row"><label for="nzWander">wander</label><input id="nzWander" type="range" min="0" max="2" step="0.05"><output for="nzWander"></output></div>
+  <div class="row"><label for="nzEvolve">evolve</label><input id="nzEvolve" type="range" min="0" max="0.3" step="0.01"><output for="nzEvolve"></output></div>
+  <div class="row"><label for="nzGustRate">gusts / min</label><input id="nzGustRate" type="range" min="0" max="4" step="0.1"><output for="nzGustRate"></output></div>
+  <div class="row"><label for="nzWaveRate">waves / min</label><input id="nzWaveRate" type="range" min="0" max="8" step="0.5"><output for="nzWaveRate"></output></div>
+  <div class="row"><label for="nzSeed">seed</label><input id="nzSeed" type="number" min="0" max="999999" step="1"><button type="button" id="nzRandom" class="solid" title="Randomise (R)">Dice</button></div>
+  <p class="note">Curl noise sets scale-free swirls (its wavelength follows flock size); wander is per-bird; waves are agitation pulses.</p>
+</section>
+
+<section id="placePanel" class="ui panel pop hidden" aria-label="Place and time">
+  <h2>Place &amp; time <small>real weather</small></h2>
+  <div class="row two"><label for="siteSel">roost</label><select id="siteSel"></select></div>
+  <div class="row two"><label for="dateIn">date</label><input id="dateIn" type="date"></div>
+  <div class="row two"><label for="timeIn">local time</label><input id="timeIn" type="time" step="60"></div>
+  <div class="row two"><label for="clockSel">clock</label>
+    <select id="clockSel"><option value="1">×1 real time</option><option value="10">×10</option><option value="60">×60</option></select></div>
+  <div class="btns"><button type="button" id="sunsetBtn">Sunset</button><button type="button" id="nowBtn">Now</button></div>
+  <p class="note">Date and time are local to the roost. Clouds, wind and sun come from Open-Meteo for that hour.</p>
+</section>
+
+<section id="ornitoPanel" class="ui panel pop hidden" aria-label="Ornitography">
+  <h2>Ornitography <small>virtual high-speed camera</small>
+    <button type="button" id="ofFold" class="fold" aria-expanded="true" aria-controls="ofBody" title="Fold settings">–</button></h2>
+  <div id="ofBody">
+  <div class="row"><label for="ofFrames">frames</label><input id="ofFrames" type="range" min="150" max="1000" step="10"><output for="ofFrames"></output></div>
+  <div class="row two"><label for="ofVfps">camera fps</label>
+    <select id="ofVfps"><option value="60">60</option><option value="120">120</option><option value="240">240</option><option value="480">480</option><option value="1000">1000</option></select></div>
+  <div class="row"><label for="ofSkip">skip</label><input id="ofSkip" type="range" min="0" max="7" step="1"><output for="ofSkip"></output></div>
+  <div class="row"><label for="ofDecay">decay</label><input id="ofDecay" type="range" min="0" max="0.05" step="0.0025"><output for="ofDecay"></output></div>
+  <div class="row two"><label for="ofBlend">blend</label>
+    <select id="ofBlend"><option value="darken">Darken (dark birds)</option><option value="lighten">Lighten (negative)</option><option value="layer">Layered (film stack)</option></select></div>
+  <div class="row two"><label for="ofTrack">track</label>
+    <select id="ofTrack"><option value="all">All birds</option><option value="one">One bird (click)</option><option value="selection">Selection (shift-click)</option></select></div>
+  <div class="row two"><label for="ofUntracked">untracked</label><span><input id="ofUntracked" type="checkbox"> <label for="ofUntracked">show live</label></span></div>
+  <div class="row two"><label for="ofCaption">caption</label><span><input id="ofCaption" type="checkbox"> <label for="ofCaption">on PNG</label></span></div>
+  </div>
+  <div class="btns obtns">
+    <button type="button" id="ofStart" class="primary" title="Space">Open shutter</button>
+    <button type="button" id="ofAuto" title="Track the 24 birds nearest the centre">Auto 24</button>
+    <button type="button" id="ofNew">New</button>
+    <button type="button" id="ofExport" disabled>Save PNG</button>
+  </div>
+  <p class="note" data-o="info">—</p>
+</section>
+
+<section id="credits" class="ui panel pop hidden" aria-label="Credits">
+  <h2>Credits</h2>
+  <ul data-c="required"></ul>
+  <ul class="refs" data-c="refs"></ul>
+</section>
+
+<script type="module" src="assets/js/main.js?b=20261020T055818Z-6af2b633"></script>
+</body>
+</html>

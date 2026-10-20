@@ -1,0 +1,386 @@
+{
+ "date": "2026-10-20T01:21:12.268Z",
+ "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+ "perf": {
+  "low": {
+   "default": {
+    "gpu": {
+     "median": 0.143,
+     "p90": 1.142,
+     "perPass": {
+      "flock.sim": 0.071,
+      "flock.lodkey": 0.004,
+      "scene": 0.056,
+      "grade": 0.011
+     }
+    },
+    "cpu": {
+     "median": 0.1,
+     "p90": 0.2,
+     "bucketMs": 0
+    },
+    "px": [
+     1088,
+     612
+    ],
+    "birds": 10240,
+    "lod": [
+     0,
+     0,
+     0,
+     10240
+    ],
+    "tris": 122880
+   },
+   "near": {
+    "gpu": {
+     "median": 0.139,
+     "p90": 1.232,
+     "perPass": {
+      "flock.sim": 0.06,
+      "flock.lodkey": 0.004,
+      "scene": 0.056,
+      "grade": 0.01
+     }
+    },
+    "cpu": {
+     "median": 0.1,
+     "p90": 0.2,
+     "bucketMs": 0.1
+    },
+    "px": [
+     1088,
+     612
+    ],
+    "birds": 10240,
+    "lod": [
+     0,
+     0,
+     0,
+     10240
+    ],
+    "tris": 122880
+   },
+   "inside": {
+    "gpu": {
+     "median": 0.134,
+     "p90": 0.613,
+     "perPass": {
+      "flock.sim": 0.06,
+      "flock.lodkey": 0.004,
+      "scene": 0.051,
+      "grade": 0.01
+     }
+    },
+    "cpu": {
+     "median": 0.1,
+     "p90": 0.2,
+     "bucketMs": 0.1
+    },
+    "px": [
+     1088,
+     612
+    ],
+    "birds": 10240,
+    "lod": [
+     0,
+     206,
+     6168,
+     0
+    ],
+    "tris": 444676
+   }
+  },
+  "medium": {
+   "default": {
+    "gpu": {
+     "median": 0.402,
+     "p90": 0.678,
+     "perPass": {
+      "flock.sim": 0.157,
+      "flock.lodkey": 0.004,
+      "scene": 0.225,
+      "grade": 0.016
+     }
+    },
+    "cpu": {
+     "median": 0.1,
+     "p90": 0.2,
+     "bucketMs": 0
+    },
+    "px": [
+     1600,
+     900
+    ],
+    "birds": 30720,
+    "lod": [
+     0,
+     0,
+     0,
+     30720
+    ],
+    "tris": 368640
+   },
+   "near": {
+    "gpu": {
+     "median": 0.434,
+     "p90": 0.721,
+     "perPass": {
+      "flock.sim": 0.155,
+      "flock.lodkey": 0.004,
+      "scene": 0.257,
+      "grade": 0.017
+     }
+    },
+    "cpu": {
+     "median": 0.1,
+     "p90": 0.2,
+     "bucketMs": 0.4
+    },
+    "px": [
+     1600,
+     900
+    ],
+    "birds": 30720,
+    "lod": [
+     0,
+     0,
+     0,
+     30720
+    ],
+    "tris": 368640
+   },
+   "inside": {
+    "gpu": {
+     "median": 0.416,
+     "p90": 0.636,
+     "perPass": {
+      "flock.sim": 0.157,
+      "flock.lodkey": 0.004,
+      "scene": 0.24,
+      "grade": 0.017
+     }
+    },
+    "cpu": {
+     "median": 0.1,
+     "p90": 0.2,
+     "bucketMs": 1.9
+    },
+    "px": [
+     1600,
+     900
+    ],
+    "birds": 30720,
+    "lod": [
+     24,
+     1014,
+     14897,
+     0
+    ],
+    "tris": 1335518
+   }
+  },
+  "high": {
+   "default": {
+    "gpu": {
+     "median": 0.771,
+     "p90": 1.513,
+     "perPass": {
+      "flock.sim": 0.391,
+      "flock.lodkey": 0.003,
+      "scene": 0.351,
+      "grade": 0.022
+     }
+    },
+    "cpu": {
+     "median": 0.1,
+     "p90": 0.3,
+     "bucketMs": 1.1
+    },
+    "px": [
+     1600,
+     900
+    ],
+    "birds": 81920,
+    "lod": [
+     0,
+     0,
+     0,
+     81920
+    ],
+    "tris": 983040
+   },
+   "near": {
+    "gpu": {
+     "median": 0.859,
+     "p90": 1.452,
+     "perPass": {
+      "flock.sim": 0.414,
+      "flock.lodkey": 0.004,
+      "scene": 0.422,
+      "grade": 0.018
+     }
+    },
+    "cpu": {
+     "median": 0.1,
+     "p90": 0.2,
+     "bucketMs": 0.4
+    },
+    "px": [
+     1600,
+     900
+    ],
+    "birds": 81920,
+    "lod": [
+     0,
+     0,
+     0,
+     81920
+    ],
+    "tris": 983040
+   },
+   "inside": {
+    "gpu": {
+     "median": 0.771,
+     "p90": 1.239,
+     "perPass": {
+      "flock.sim": 0.414,
+      "flock.lodkey": 0.004,
+      "scene": 0.331,
+      "grade": 0.019
+     }
+    },
+    "cpu": {
+     "median": 0.1,
+     "p90": 0.2,
+     "bucketMs": 1.6
+    },
+    "px": [
+     1600,
+     900
+    ],
+    "birds": 81920,
+    "lod": [
+     0,
+     2053,
+     12297,
+     0
+    ],
+    "tris": 1579592
+   }
+  }
+ },
+ "fx": {
+  "low": {
+   "flock.iridescence": {
+    "on": 0.109,
+    "off": 0.131,
+    "delta": -0.022
+   },
+   "flock.wingTransmit": {
+    "on": 0.138,
+    "off": 0.138,
+    "delta": 0
+   },
+   "flock.selfShadow": {
+    "on": 0.138,
+    "off": 0.056,
+    "delta": 0.082
+   },
+   "flock.aerial": {
+    "on": 0.134,
+    "off": 0.139,
+    "delta": -0.005
+   },
+   "flock.minPixel": {
+    "on": 0.131,
+    "off": 0.11,
+    "delta": 0.021
+   },
+   "flock.lod0": {
+    "on": 0.118,
+    "off": 0.124,
+    "delta": -0.006
+   },
+   "flock.normalMapLOD0": {
+    "on": 0.115,
+    "off": 0.142,
+    "delta": -0.027
+   }
+  },
+  "medium": {
+   "flock.iridescence": {
+    "on": 0.25,
+    "off": 0.379,
+    "delta": -0.129
+   },
+   "flock.wingTransmit": {
+    "on": 0.416,
+    "off": 0.252,
+    "delta": 0.164
+   },
+   "flock.selfShadow": {
+    "on": 0.403,
+    "off": 0.404,
+    "delta": -0.001
+   },
+   "flock.aerial": {
+    "on": 0.387,
+    "off": 0.453,
+    "delta": -0.066
+   },
+   "flock.minPixel": {
+    "on": 0.421,
+    "off": 0.404,
+    "delta": 0.017
+   },
+   "flock.lod0": {
+    "on": 0.255,
+    "off": 0.25,
+    "delta": 0.005
+   },
+   "flock.normalMapLOD0": {
+    "on": 0.412,
+    "off": 0.392,
+    "delta": 0.02
+   }
+  },
+  "high": {
+   "flock.iridescence": {
+    "on": 0.353,
+    "off": 0.434,
+    "delta": -0.081
+   },
+   "flock.wingTransmit": {
+    "on": 0.331,
+    "off": 0.377,
+    "delta": -0.046
+   },
+   "flock.selfShadow": {
+    "on": 0.43,
+    "off": 0.423,
+    "delta": 0.007
+   },
+   "flock.aerial": {
+    "on": 0.451,
+    "off": 0.438,
+    "delta": 0.013
+   },
+   "flock.minPixel": {
+    "on": 0.441,
+    "off": 0.452,
+    "delta": -0.011
+   },
+   "flock.lod0": {
+    "on": 0.366,
+    "off": 0.436,
+    "delta": -0.07
+   },
+   "flock.normalMapLOD0": {
+    "on": 0.438,
+    "off": 0.359,
+    "delta": 0.079
+   }
+  }
+ }
+}

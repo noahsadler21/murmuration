@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trails test</title>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#c3c4c5}#c{position:fixed;inset:0;width:100vw;height:100vh;display:block}</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+// Trails builder test bench (SPEC §9 T1–T6, T8). A SYNTHETIC silhouette source stands in for the flock: procedural
+// low-poly starlings (body loft, square tail, two-segment wings) driven by the §6.2 flap cycle (13.3 Hz, downstroke
+// 57 %, wrist-flexed upstroke) plus glide and bound bouts, flying curved, banked paths under a pale overcast plate.
+// The frame pipeline is §1's: sceneRT (RGBA16F, MSAA 4) -> test grade -> frameRT -> trails.stamp -> present.
+import * as THREE from 'three';
+import { makeState } from './state_stub.js';
+import { Trails } from '../../src/trails.js';
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // our shaders already write display-referred values
+const DPR = window.devicePixelRatio || 1;
+const W = Math.floor(innerWidth * Math.min(DPR, 1.25)), H = Math.floor(innerHeight * Math.min(DPR, 1.25));
+renderer.setPixelRatio(1);
+renderer.setSize(W, H, false);
+const gl = renderer.getContext();
+
+const state = makeState();
+state.site = { id: 'brighton', name: 'Brighton West Pier, UK', tz: 'Europe/London' };
+state.time.nowMs = Date.parse('2025-11-20T16:05:00Z');
+state.mode = 'ornito';
+const prof = (() => { let n = null, t0 = 0; const acc = {}; return { acc, begin(x) { n = x; t0 = performance.now(); }, end() { acc[n] = (acc[n] || 0) + performance.now() - t0; } }; })();
+const trails = new Trails({ renderer, state, prof });
+trails.setSize(W, H);
+
+const half = { type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: false };
+const sceneRT = new THREE.WebGLRenderTarget(W, H, { ...half, depthBuffer: true, samples: 4 });
+const frameRT = new THREE.WebGLRenderTarget(W, H, half);
+
+// ---------- test grade (the real one is the Sky builder's): copy, or 1 - x for the lighten path's "negative" look ----------
+const qCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const qMat = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, neg: { value: 0 } }, depthTest: false, depthWrite: false,
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
+  fragmentShader: 'uniform sampler2D t; uniform float neg; varying vec2 vUv; void main(){ vec3 c = texture2D(t, vUv).rgb; gl_FragColor = vec4(mix(c, 1.0 - c, neg), 1.); }' });
+const qScene = new THREE.Scene(); const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), qMat); q.frustumCulled = false; qScene.add(q);
+const grade = {
+  negative: false,
+  render(src, dst) { qMat.uniforms.t.value = src; qMat.uniforms.neg.value = this.negative ? 1 : 0; renderer.setRenderTarget(dst); renderer.render(qScene, qCam); },
+  present(src) { qMat.uniforms.t.value = src; qMat.uniforms.neg.value = 0; renderer.setRenderTarget(null); renderer.render(qScene, qCam); },
+  presentTo(src, rt) { qMat.uniforms.t.value = src; qMat.uniforms.neg.value = 0; renderer.setRenderTarget(rt); renderer.render(qScene, qCam); renderer.setRenderTarget(null); },
+};
+
+// ---------- scene: pale overcast plate ----------
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, W / H, 0.1, 2000);
+const skyMat = new THREE.ShaderMaterial({ depthWrite: false, depthTest: false,
+  uniforms: { uAspect: { value: W / H } },
+  vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = vec4(position.xy, 0.9999, 1.); }',
+  fragmentShader: `uniform float uAspect; varying vec2 vP;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+    void main(){
+      float y = vP.y * 0.5 + 0.5;
+      vec3 top = vec3(197., 197., 198.) / 255., bot = vec3(190., 191., 192.) / 255.;
+      vec2 p = vec2(vP.x * uAspect, vP.y) * 1.6;
+      float c = n(p) * 0.6 + n(p * 2.1 + 7.3) * 0.4;            // soft cloud texture, +-2 codes
+      gl_FragColor = vec4(mix(bot, top, y) + (c - 0.5) * 4.0 / 255., 1.);
+    }` });
+const sky = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), skyMat); sky.frustumCulled = false; sky.renderOrder = -1000; scene.add(sky);
+
+// ---------- procedural starling (bird frame: +Z head, +Y back, +X left wing; metres) ----------
+function bodyGeo() {
+  const st = [[0.105, 0.0, 0.0], [0.088, 0.006, 0.0], [0.070, 0.014, 0.004], [0.040, 0.021, 0.006], [0.005, 0.024, 0.004],
+    [-0.030, 0.020, 0.002], [-0.058, 0.012, 0.004], [-0.068, 0.006, 0.006]];   // z, radius, y offset
+  const S = 6, pos = [], idx = [];
+  st.forEach(([z, r, yo]) => { for (let k = 0; k < S; k++) { const a = k / S * Math.PI * 2; pos.push(Math.cos(a) * r, Math.sin(a) * r * 0.85 + yo, z); } });
+  for (let i = 0; i < st.length - 1; i++) for (let k = 0; k < S; k++) {
+    const a = i * S + k, b = i * S + (k + 1) % S, c = a + S, d = b + S; idx.push(a, c, b, b, c, d);
+  }
+  // square-ended tail: 3.2 cm showing, fans 1.7 -> 3.6 cm, 6 mm thick
+  const t0 = pos.length / 3;
+  for (const [z, w] of [[-0.058, 0.0085], [-0.105, 0.018]]) for (const y of [0.009, 0.003]) pos.push(-w, y, z, w, y, z);
+  idx.push(t0, t0 + 4, t0 + 1, t0 + 1, t0 + 4, t0 + 5, t0 + 2, t0 + 3, t0 + 6, t0 + 3, t0 + 7, t0 + 6, t0 + 4, t0 + 6, t0 + 5, t0 + 5, t0 + 6, t0 + 7);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g;
+}
+function polyGeo(pts) {   // flat polygon in the XZ plane (fan), wing surfaces
+  const pos = []; pts.forEach(([x, z]) => pos.push(x, 0, z));
+  const idx = []; for (let i = 1; i < pts.length - 1; i++) idx.push(0, i, i + 1);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return g;
+}
+// arm: shoulder (x=0) to wrist (x=0.075); hand: wrist (x=0) to the pointed tip (P8/P9) at x=0.12, swept back
+const ARM = polyGeo([[0, 0.022], [0.075, 0.016], [0.075, -0.030], [0.040, -0.040], [0, -0.042]]);
+const HAND = polyGeo([[0, 0.016], [0.060, 0.006], [0.118, -0.018], [0.112, -0.030], [0.075, -0.040], [0.030, -0.040], [0, -0.030]]);
+const BODY = bodyGeo();
+const birdMat = (col) => new THREE.ShaderMaterial({ side: THREE.DoubleSide,
+  uniforms: { uCol: { value: new THREE.Color(...col.map(c => c / 255)) }, uNeg: { value: 0 } },
+  vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: 'uniform vec3 uCol; void main(){ gl_FragColor = vec4(uCol, 1.); }' });
+const M_BODY = birdMat([40, 37, 35]), M_ARM = birdMat([50, 46, 43]), M_HAND = birdMat([58, 54, 51]);
+
+function makeBird() {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(BODY, M_BODY));
+  const sides = [];
+  for (const s of [1, -1]) {
+    const sh = new THREE.Group(); sh.position.set(0.012 * s, 0.012, 0.018); sh.scale.x = s;
+    const arm = new THREE.Mesh(ARM, M_ARM); sh.add(arm);
+    const wr = new THREE.Group(); wr.position.set(0.075, 0, 0); sh.add(wr);
+    wr.add(new THREE.Mesh(HAND, M_HAND));
+    g.add(sh); sides.push({ sh, wr, s });
+  }
+  g.userData.sides = sides;
+  return g;
+}
+const ease = x => 0.5 - 0.5 * Math.cos(Math.PI * x);
+// §6.2 cycle: phase 0 = top; downstroke 0 -> 0.57; upstroke with the wrist flexed and the hand swept back.
+function pose(bird, phase, glideW, boundW) {
+  let elev, wristUp, sweep, handSweep;
+  if (phase < 0.57) { const u = ease(phase / 0.57); elev = 58 - 98 * u; wristUp = 6 - 14 * u; sweep = 4 * (1 - u); handSweep = 6; }
+  else { const u = (phase - 0.57) / 0.43, e = ease(u), m = Math.sin(Math.PI * u); elev = -40 + 98 * e; wristUp = -8 + 14 * e - 22 * m; sweep = 26 * m; handSweep = 6 + 48 * m; }
+  // glide: flat, slight dihedral; bound: wings folded tight against the body
+  elev = elev * (1 - glideW - boundW) + 4 * glideW - 6 * boundW;
+  wristUp = wristUp * (1 - glideW - boundW) + 0 * glideW - 4 * boundW;
+  sweep = sweep * (1 - glideW - boundW) + 6 * glideW + 82 * boundW;
+  handSweep = handSweep * (1 - glideW - boundW) + 10 * glideW + 95 * boundW;
+  const D = Math.PI / 180;
+  for (const { sh, wr } of bird.userData.sides) {
+    sh.rotation.set(0, 0, 0); sh.rotateY(sweep * D); sh.rotateZ(elev * D);   // scale.x mirrors the right side
+    wr.rotation.set(0, 0, 0); wr.rotateY(handSweep * D); wr.rotateZ(wristUp * D);
+  }
+}
+
+// ---------- birds and their paths ----------
+function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+let birds = [];
+function clearBirds() { birds.forEach(b => scene.remove(b.obj)); birds = []; }
+function spawnFlock(n, seed) {
+  clearBirds();
+  const r = rng(seed);
+  for (let i = 0; i < n; i++) {
+    const obj = makeBird(); scene.add(obj);
+    // a loose sheet (4:1:2) that sweeps through a banked turn; each bird has its own lateral and vertical undulation
+    const off = new THREE.Vector3((r() - 0.5) * 9, (r() - 0.5) * 3.2, (r() - 0.5) * 7);
+    birds.push({ id: i, obj, off, ph: r(), hz: 13.3 * (0.94 + 0.12 * r()), wob: r() * 6.28, wobA: 0.35 + 0.5 * r(),
+      bout: 3 + Math.floor(r() * 7), pause: 0.12 + r() * 0.33, isBound: r() < 0.33, t0: -r() * 0.6, seed: r(), scale: 0.96 + 0.08 * r() });
+  }
+}
+// flock path: a gentle descending S across the frame (world: camera at origin, looking at -Z, up +Y)
+function flockPath(t, out) {
+  const s = 12.5 * t;
+  return out.set(-15 + s, 9.5 + 2.4 * Math.sin(s * 0.16) - 0.06 * s, -32 + 5.5 * Math.sin(s * 0.11 + 0.8));
+}
+function birdPos(b, t, out) {
+  flockPath(t, out);
+  const c = Math.sin(t * 2.2 + b.wob) * b.wobA, c2 = Math.cos(t * 1.7 + b.wob * 1.3) * b.wobA;
+  // the sheet shears as it turns: offsets rotate slowly with time (a "rolling" band)
+  const a = 0.22 * t;
+  out.x += b.off.x * Math.cos(a) - b.off.z * Math.sin(a) + 0.5 * c;
+  out.y += b.off.y + 0.8 * c2 + 0.35 * Math.sin(b.off.x * 0.6 + t * 3.1);
+  out.z += b.off.x * Math.sin(a) + b.off.z * Math.cos(a) + 0.4 * c;
+  return out;
+}
+let mode1 = false;   // single-bird mode: one bird crossing close, side-on and slightly from below
+function onePath(t, out) { return out.set(-4.3 + 12.5 * t, 1.25 + 0.06 * Math.sin(t * 5), -8.0); }
+
+const _p = new THREE.Vector3(), _q = new THREE.Vector3(), _v = new THREE.Vector3(), _up = new THREE.Vector3(), _m = new THREE.Matrix4();
+// bout machine after Tobalske (flap 3–9 beats, then a 0.12–0.45 s glide or bound)
+function flightState(b, t) {
+  const beatT = b.bout / b.hz, cyc = beatT + b.pause;
+  const lt = t - b.t0, k = Math.floor(lt / cyc), u = lt - k * cyc;
+  const pauseOn = u > beatT;
+  const ramp = Math.min(1, Math.min(u - beatT, cyc - u) / 0.08);
+  const w = pauseOn ? Math.max(0, ramp) : 0;
+  return { glide: b.isBound ? 0 : w, bound: b.isBound ? w : 0, phase: pauseOn ? (b.isBound ? 0.91 : 0.28) : ((b.ph + u * b.hz) % 1) };
+}
+function updateBirds(t) {
+  for (const b of birds) {
+    const P = mode1 ? onePath : (tt, o) => birdPos(b, tt, o);
+    P(t, _p); P(t + 0.02, _q);
+    _v.subVectors(_q, _p).normalize();
+    const P2 = P(t + 0.04, new THREE.Vector3());
+    const acc = P2.sub(_q).normalize().sub(_v);                 // turn direction ~ lateral acceleration
+    const lat = acc.length() * 50;
+    const side = new THREE.Vector3().crossVectors(_v, new THREE.Vector3(0, 1, 0)).normalize();
+    const roll = Math.max(-0.9, Math.min(0.9, Math.atan(lat * 0.6) * Math.sign(acc.dot(side)) || 0));
+    _up.set(0, 1, 0).applyAxisAngle(_v, roll);
+    const zAxis = _v.clone(), xAxis = new THREE.Vector3().crossVectors(_up, zAxis).normalize(), yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis);
+    _m.makeBasis(xAxis, yAxis, zAxis);
+    b.obj.position.copy(_p); b.obj.quaternion.setFromRotationMatrix(_m); b.obj.scale.setScalar(b.scale);
+    const fs = mode1 ? { glide: 0, bound: 0, phase: (b.ph + t * 13.3) % 1 } : flightState(b, t);
+    pose(b.obj, fs.phase, fs.glide, fs.bound);
+  }
+}
+function setNegative(on) { grade.negative = on; }
+function visibleIds(ids) { birds.forEach(b => b.obj.visible = !ids || ids.includes(b.id)); }
+
+// ---------- frame pipeline ----------
+let simT = 0;
+function renderFrame(showBirds = true) {
+  birds.forEach(b => { if (!showBirds) b.obj.visible = false; });
+  renderer.setRenderTarget(sceneRT); renderer.setClearColor(0x000000, 1); renderer.clear(); renderer.render(scene, camera);
+  grade.render(sceneRT.texture, frameRT);
+  renderer.setRenderTarget(null);
+}
+function setView(single) {
+  if (single) { camera.position.set(0, 0, 0); camera.lookAt(0, 1.25, -8); }
+  else { camera.position.set(0, 0, 0); camera.lookAt(0, 8.5, -32); }
+  camera.updateMatrixWorld();
+}
+function exposure({ frames = 150, vfps = 240, skip = 0, decay = 0, blend = 'darken', track = 'all', ids = null, t0 = 0, hook = null, post = null }) {
+  Object.assign(state.ornito, { frames, vfps, skip, decay, blend, track });
+  setNegative(blend === 'lighten');
+  simT = t0; updateBirds(simT);
+  renderFrame(false);                    // plate: sky only
+  trails.begin(frameRT.texture);
+  visibleIds(ids);
+  const camM = camera.matrixWorld.toArray().join(','), projM = camera.projectionMatrix.toArray().join(',');
+  let camOk = true, n = 0;
+  while (trails.running && n < 5000) {
+    const plan = trails.plan(state);
+    for (let i = 0; i < plan.steps; i++) simT += plan.dt;
+    updateBirds(simT);
+    if (hook) hook(n, simT);
+    renderFrame(true); visibleIds(ids);
+    if (post) post(n);
+    if (plan.stamp) trails.stamp(frameRT.texture);
+    if (camera.matrixWorld.toArray().join(',') !== camM || camera.projectionMatrix.toArray().join(',') !== projM) camOk = false;
+    n++;
+  }
+  visibleIds(null);
+  return { camOk, loops: n };
+}
+function present(tex) { grade.present(tex); }
+function readCanvas() { const b = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, b); return b; }
+async function capture(name) {
+  const url = canvas.toDataURL('image/png');
+  await fetch('/capture?name=' + encodeURIComponent(name), { method: 'POST', body: url });
+}
+const lum = (b, i) => (b[i] + b[i + 1] + b[i + 2]) / 3;
+function minLum(b) { let m = 1e9; for (let i = 0; i < b.length; i += 4) m = Math.min(m, lum(b, i)); return m; }
+
+// ---------- tests ----------
+window.runTests = async () => {
+  const R = { renderPx: [W, H], dpr: DPR };
+  const frameEvents = []; state.on('ornito:frame', p => frameEvents.push(p));
+
+  // T1 + T2 (flock): 60 birds, 240 fps, 400 frames, darken
+  spawnFlock(60, 7); mode1 = false; setView(false);
+  // single-frame reference darkness
+  simT = 0.3; updateBirds(simT); renderFrame(true);
+  const single = trails.readPixels(frameRT.texture);
+  present(frameRT.texture); await capture('trails_single_frame.png');
+  const singleMin = minLum(single);
+  frameEvents.length = 0;
+  const e1 = exposure({ frames: 400, vfps: 240, t0: 0.3 });
+  const last = frameEvents.filter(p => !p.cleared).pop();
+  R.T1 = { stamps: trails.debug.stampCount, frames: 400, camBitIdentical: e1.camOk, indicatorLast: last, afterEndPlan: trails.plan(state),
+    pass: trails.debug.stampCount === 400 && e1.camOk && last.done === 400 && last.frames === 400 };
+  R.T1.pass = R.T1.pass && R.T1.afterEndPlan.steps === 0 && !R.T1.afterEndPlan.stamp;
+  const acc = trails.debug.readAcc(), plate = trails.debug.readPlate();
+  const accMin = minLum(acc);
+  let outside = 0, outsideBad = 0, lighter = 0;
+  for (let i = 0; i < acc.length; i += 4) {
+    const d = lum(acc, i) - lum(plate, i);
+    if (d > 0.5) lighter++;
+    if (Math.abs(d) <= 1) outside++; else if (Math.abs(d) < 3) outsideBad++;
+  }
+  const cmp = trails.debug.compareToPlate();
+  R.T2flock = { singleFrameMin: singleMin, accMin, diff: Math.abs(accMin - singleMin), lighterThanPlatePx: lighter, ...cmp,
+    pass: Math.abs(accMin - singleMin) <= 3 && lighter === 0 };
+  present(trails.output); await capture('trails_all_darken.png');
+
+  // T5: PNG export matches the presented frame
+  state.ornito.caption = false;
+  const ex = await trails.exportPNG(grade, { download: false });
+  const shown = readCanvas();
+  const c2 = ex.canvas.getContext('2d').getImageData(0, 0, W, H).data;
+  let maxD = 0;
+  for (let y = 0; y < H; y += 3) for (let x = 0; x < W; x += 3) {
+    const i = ((H - 1 - y) * W + x) * 4, j = (y * W + x) * 4;
+    for (let c = 0; c < 3; c++) maxD = Math.max(maxD, Math.abs(shown[i + c] - c2[j + c]));
+  }
+  const fnRe = /^ornitography_brighton_\d{8}-\d{4}_400f_240fps\.png$/;
+  R.T5 = { filename: ex.filename, width: ex.width, height: ex.height, maxDiffVsPresented: maxD, blobBytes: ex.blob.size,
+    pass: fnRe.test(ex.filename) && ex.width === W && ex.height === H && maxD <= 1 };
+  state.ornito.caption = true;
+  const exc = await trails.exportPNG(grade, { download: false });
+  await fetch('/capture?name=trails_export_caption.png', { method: 'POST', body: exc.canvas.toDataURL('image/png') });
+
+  // T3: lighten / negative
+  exposure({ frames: 400, vfps: 240, blend: 'lighten', t0: 0.3 });
+  const accL = trails.debug.readAcc(), plateL = trails.debug.readPlate();
+  let maxL = 0, darkerL = 0; for (let i = 0; i < accL.length; i += 4) { const d = lum(accL, i) - lum(plateL, i); maxL = Math.max(maxL, d); if (d < -0.5) darkerL++; }
+  R.T3 = { plateMean: lum(plateL, (H >> 1) * W * 4), maxBrightening: maxL, darkerThanPlatePx: darkerL, pass: maxL > 100 && darkerL === 0 };
+  present(trails.output); await capture('trails_all_lighten.png');
+  state.emit('ornito:new');
+
+  // T2 (one bird): distinct repeating wing shapes; autocorrelation peak at 240/13.3 = 18 stamps
+  spawnFlock(1, 3); mode1 = true; setView(true);
+  simT = 0.3; updateBirds(0.3); renderFrame(true);
+  const single1 = minLum(trails.readPixels(frameRT.texture));
+  present(frameRT.texture); await capture('trails_one_single_frame.png');
+  const proj = []; const hookP = new THREE.Vector3();
+  // per-stamp darkness (every 6th stamp): the stamp's darkest pixel must survive in acc unchanged (MIN, not averaging)
+  const stampDark = [];
+  exposure({ frames: 150, vfps: 240, track: 'one', ids: [0], t0: 0, hook: (n, t) => { onePath(t, hookP); const s = hookP.clone().project(camera); proj.push([(s.x * 0.5 + 0.5) * W, (s.y * 0.5 + 0.5) * H]); },
+    post: n => { if (n % 6) return; const b = trails.readPixels(frameRT.texture); let m = 1e9, at = 0; for (let i = 0; i < b.length; i += 4) { const v = lum(b, i); if (v < m) { m = v; at = i; } } stampDark.push({ n, min: m, at }); } });
+  const a1 = trails.debug.readAcc(), p1 = trails.debug.readPlate();
+  const prof1 = new Float64Array(W);
+  for (let x = 0; x < W; x++) { let c = 0; for (let y = 0; y < H; y++) { const i = (y * W + x) * 4; if (lum(p1, i) - lum(a1, i) > 25) c++; } prof1[x] = c; }
+  const pxPerStamp = (proj[proj.length - 1][0] - proj[0][0]) / (proj.length - 1);
+  const x0 = Math.ceil(Math.max(0, proj[0][0] + 60)), x1 = Math.floor(Math.min(W - 1, proj[proj.length - 1][0] - 60));
+  const seg = Array.from(prof1.slice(x0, x1)); const mu = seg.reduce((a, b) => a + b, 0) / seg.length;
+  const z = seg.map(v => v - mu); const ac = [];
+  for (let lag = 0; lag < Math.min(z.length - 1, Math.round(40 * pxPerStamp)); lag++) { let s = 0; for (let i = 0; i + lag < z.length; i++) s += z[i] * z[i + lag]; ac.push(s / (z.length - lag)); }
+  let best = -1, bestV = -1e9;
+  for (let lag = Math.round(8 * pxPerStamp); lag < ac.length; lag++) if (ac[lag] > bestV && ac[lag] >= ac[lag - 1] && ac[lag] >= (ac[lag + 1] ?? -1e9)) { bestV = ac[lag]; best = lag; }
+  const peakStamps = best / pxPerStamp;
+  const darkMin = Math.min(...stampDark.map(s => s.min));
+  const survive = stampDark.map(s => lum(a1, s.at) - s.min);          // <= 0 under MIN; > 0 would mean averaging / smear
+  R.T2one = { pxPerStamp, singleFrameMin: single1, stampsSampled: stampDark.length, stampMinRange: [darkMin, Math.max(...stampDark.map(s => s.min))],
+    accMin: minLum(a1), worstSurvivalCodes: Math.max(...survive), peakLagPx: best, peakStamps, acNorm: bestV / ac[0],
+    pass: Math.abs(peakStamps - 18) <= 2 && Math.abs(minLum(a1) - darkMin) <= 3 && Math.max(...survive) <= 3 };
+  present(trails.output); await capture('trails_one.png');
+  state.emit('ornito:new');
+
+  // T4: decay. One stamp with the bird, then k stamps with it hidden; contrast keeps (1 - d)^k.
+  const d = 0.02, K = [5, 15, 30];
+  R.T4 = { decay: d, rows: [] };
+  const hide = (n) => { if (n >= 1) birds[0].obj.position.y += 1000; };
+  exposure({ frames: 1, decay: d, track: 'one', ids: [0], t0: 0.2, hook: hide });
+  const a0 = trails.debug.readAcc(), pl0 = trails.debug.readPlate();
+  let at = 0, mi0 = 1e9; for (let i = 0; i < a0.length; i += 4) { const v = lum(a0, i); if (v < mi0) { mi0 = v; at = i; } }
+  const c0 = lum(pl0, at) - mi0;
+  R.T4.pixel = { plate: lum(pl0, at), bird: mi0, contrast0: c0 };
+  for (const k of K) {
+    exposure({ frames: k + 1, decay: d, track: 'one', ids: [0], t0: 0.2, hook: hide });
+    const a = trails.debug.readAcc(), p = trails.debug.readPlate();
+    const ck = lum(p, at) - lum(a, at), want = c0 * Math.pow(1 - d, k);
+    R.T4.rows.push({ k, measured: +ck.toFixed(2), expected: +want.toFixed(2), err: +(ck - want).toFixed(2) });
+  }
+  R.T4.pass = R.T4.rows.every(r => Math.abs(r.err) <= 2);
+  // a decayed flock exposure for the look
+  mode1 = false; spawnFlock(60, 7); setView(false);
+  exposure({ frames: 400, vfps: 240, decay: 0.006, t0: 0.3 });
+  present(trails.output); await capture('trails_all_decay.png');
+
+  // T6: track selection; untracked birds must be absent from acc
+  const sel = [3, 11, 19, 27, 35, 43];
+  const boxes = [];
+  const tmp = new THREE.Vector3();
+  exposure({ frames: 300, vfps: 240, track: 'selection', ids: sel, t0: 0.3, hook: () => {
+    const tb = [], ub = [];
+    for (const b of birds) { tmp.copy(b.obj.position).project(camera); const bx = [(tmp.x * 0.5 + 0.5) * W, (tmp.y * 0.5 + 0.5) * H]; (sel.includes(b.id) ? tb : ub).push(bx); }
+    boxes.push({ tb, ub });
+  } });
+  const a6 = trails.debug.readAcc(), p6 = trails.debug.readPlate();
+  let leaked = 0, checked = 0;
+  const tracked = boxes.flatMap(b => b.tb);
+  for (const { ub } of boxes.filter((_, i) => i % 10 === 0)) for (const [x, y] of ub) {
+    if (tracked.some(([tx, ty]) => Math.abs(tx - x) < 30 && Math.abs(ty - y) < 30)) continue;
+    for (let dy = -6; dy <= 6; dy += 2) for (let dx = -6; dx <= 6; dx += 2) {
+      const xx = Math.round(x + dx), yy = Math.round(y + dy); if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+      const i = (yy * W + xx) * 4; checked++; if (Math.abs(lum(a6, i) - lum(p6, i)) > 1) leaked++;
+    }
+  }
+  R.T6 = { selection: sel, checkedPx: checked, leakedPx: leaked, pass: checked > 500 && leaked === 0 };
+  present(trails.output); await capture('trails_selection.png');
+
+  // T8: GPU cost of one stamp at render size (decay on = worst case: 2 full-screen passes)
+  const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  const stampN = 120;
+  state.emit('ornito:new');
+  renderFrame(true);
+  const timeStamps = async (decay) => {
+    Object.assign(state.ornito, { frames: 100000, decay, blend: 'darken' });
+    trails.begin(frameRT.texture);
+    gl.finish();
+    let gpu = null;
+    if (ext) {
+      const qq = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, qq);
+      for (let i = 0; i < stampN; i++) trails.stamp(frameRT.texture);
+      gl.endQuery(ext.TIME_ELAPSED_EXT);
+      for (let i = 0; i < 200; i++) { await new Promise(r => setTimeout(r, 10)); if (gl.getQueryParameter(qq, gl.QUERY_RESULT_AVAILABLE)) break; }
+      if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) gpu = gl.getQueryParameter(qq, gl.QUERY_RESULT) / 1e6 / stampN;
+    }
+    const t0 = performance.now(); for (let i = 0; i < stampN; i++) trails.stamp(frameRT.texture); gl.finish();
+    const wall = (performance.now() - t0) / stampN;
+    trails.end(); state.emit('ornito:new');
+    return { gpuMs: gpu, wallMsFinish: +wall.toFixed(3) };
+  };
+  const s0 = await timeStamps(0), s1 = await timeStamps(0.02);
+  const bud = 0.6;
+  const worst = Math.max(s0.gpuMs ?? s0.wallMsFinish, s1.gpuMs ?? s1.wallMsFinish);
+  R.T8 = { renderPx: [W, H], timerQuery: !!ext, decay0: s0, decay002: s1, budgetMediumMs: bud, pass: worst <= bud };
+  R.gpu = gl.getParameter((gl.getExtension('WEBGL_debug_renderer_info') || {}).UNMASKED_RENDERER_WEBGL || gl.RENDERER);
+  return R;
+};
+window.ready = true;
+</script>
+</body>
+</html>

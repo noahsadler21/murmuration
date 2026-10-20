@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flock test</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#c4c5c6}
+#c{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+#hud{position:fixed;left:12px;top:10px;font:12px/1.4 system-ui,sans-serif;color:#1d1e20;font-variant-numeric:tabular-nums;
+  background:rgba(250,250,251,.62);border:1px solid rgba(30,32,36,.1);padding:6px 9px;border-radius:6px;white-space:pre;pointer-events:none}
+body.clean #hud{display:none}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<script type="module">
+// Flock builder test bench (SPEC §4, tests F1–F12). The flock runs under a PLAIN GRADIENT stand-in sky with a
+// stand-in signature grade, in the §1 pipeline shape: sim steps → updateLOD → scene into sceneRT (RGBA16F, MSAA) →
+// grade to the canvas. URL: ?q=low|medium|high &seed= &preset= &wind=<m/s at 80 m> &view=default|orbit-close|inside|top
+// &lodviz=1 &fx=id:0|1,... &msaa= &nofalcon=1 &clean=1 (no HUD) &paused=1
+import * as THREE from 'three';
+import { makeState, QUALITY, NOISE_PRESETS } from './state_stub.js';
+import { Flock } from '../../src/flock.js';
+
+const P = new URLSearchParams(location.search);
+const qName = P.get('q') || 'medium';
+if (P.get('clean')) document.body.classList.add('clean');
+const state = makeState();
+state.quality = qName; state.preset = QUALITY[qName]; state.fx = { ...QUALITY[qName].fx };
+for (const kv of (P.get('fx') || '').split(',').filter(Boolean)) { const [k, v] = kv.split(':'); state.fx[k] = +v; }
+const seed = +(P.get('seed') || 1);
+state.noise.seed = seed;
+const preset = P.get('preset') || 'swirling';
+Object.assign(state.noise, NOISE_PRESETS[preset], { preset });
+// ?p=name:value,... overrides flock params; ?nz=name:value,... overrides noise params (tuning only)
+for (const kv of (P.get('p') || '').split(',').filter(Boolean)) { const [k, v] = kv.split(':'); state.flock.params[k] = +v; }
+for (const kv of (P.get('nz') || '').split(',').filter(Boolean)) { const [k, v] = kv.split(':'); state.noise[k] = +v; }
+state.falcon.enabled = !P.get('nofalcon');
+state.falcon.autoAttack = !P.get('bench');
+// wind: the sample-overcast profile (§5.1): 10 m 6 m/s from 225°, 80 m 9 m/s, 850 hPa 14 m/s from 235°; ?wind= scales 80 m
+const windV = (s, d, out) => out.set(-s * Math.sin(d * Math.PI / 180), 0, s * Math.cos(d * Math.PI / 180));
+const w80 = P.has('wind') ? +P.get('wind') : 9;
+windV(w80 * 6 / 9, 225, state.wind.v10); windV(w80, 228, state.wind.v80); windV(w80 * 14 / 9, 235, state.wind.v850);
+// sun: Brighton, 2025-11-20 16:05 UTC ≈ azimuth 236°, altitude −1.5° (just after sunset, overcast)
+const sunAz = 236 * Math.PI / 180, sunAlt = 2 * Math.PI / 180;
+state.sun.dir.set(Math.sin(sunAz) * Math.cos(sunAlt), Math.sin(sunAlt), -Math.cos(sunAz) * Math.cos(sunAlt));
+
+// renderer + targets (render size = floor(css · min(DPR, dprCap) · scale), §1)
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: true });
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.setPixelRatio(1);
+const Q = state.preset;
+const msaa = P.has('msaa') ? +P.get('msaa') : Q.msaa;
+const scale = P.has('scale') ? +P.get('scale') : Q.scale;
+let RW, RH;
+const sceneRT = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: msaa, depthBuffer: true });
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, Q.dprCap);
+  RW = Math.floor(innerWidth * dpr * scale); RH = Math.floor(innerHeight * dpr * scale);
+  renderer.setSize(RW, RH, false);
+  sceneRT.setSize(RW, RH);
+  camera.aspect = RW / RH; camera.updateProjectionMatrix();
+  if (flock) flock.setRenderSize(RW, RH);
+}
+
+// GPU profiler (§1 names), EXT_disjoint_timer_query_webgl2; a no-op unless a bench is collecting
+const gl = renderer.getContext();
+const tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+const prof = {
+  on: false, cur: null, frame: null, frames: [],
+  begin(name) { if (!this.on) return; this.end(); const q = gl.createQuery(); gl.beginQuery(tq.TIME_ELAPSED_EXT, q); this.cur = { name, q }; },
+  end() { if (!this.on || !this.cur) return; gl.endQuery(tq.TIME_ELAPSED_EXT); this.frame.push(this.cur); this.cur = null; },
+};
+
+// stand-in sky: a pale overcast gradient (scene radiance, Lref = 1) with faint cloud texture
+const camera = new THREE.PerspectiveCamera(35, 16 / 9, 0.5, 6000);
+const scene = new THREE.Scene();
+const skyMat = new THREE.ShaderMaterial({
+  depthWrite: false, depthTest: false,
+  uniforms: { uT: { value: 0 } },
+  vertexShader: `varying vec3 vDir; void main(){ vec4 c = vec4(position.xy, 1.0, 1.0);
+    vec4 v = inverse(projectionMatrix) * c; v /= v.w; vDir = (inverse(viewMatrix) * vec4(v.xyz, 0.0)).xyz; gl_Position = vec4(position.xy, 1.0, 1.0); }`,
+  fragmentShader: `uniform float uT; varying vec3 vDir;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+    void main(){ vec3 d = normalize(vDir); float e = d.y;
+      vec3 sky = mix(vec3(0.875, 0.88, 0.89), vec3(1.0, 1.005, 1.015), smoothstep(-0.02, 0.75, e));
+      vec2 q = d.xz / max(e + 0.08, 0.05) * 2.0 + vec2(uT * 0.004, 0.0);
+      float n = vn(q) * 0.6 + vn(q * 2.1) * 0.3 + vn(q * 4.3) * 0.1;
+      sky *= 1.0 + 0.035 * (n - 0.5) * smoothstep(0.0, 0.2, e);
+      vec3 ground = vec3(0.10, 0.104, 0.108);
+      vec3 col = e > 0.0 ? sky : mix(sky * 0.9, ground, smoothstep(0.0, -0.03, e));
+      gl_FragColor = vec4(col, 1.0); }`,
+});
+const skyTri = new THREE.BufferGeometry();
+skyTri.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
+const skyMesh = new THREE.Mesh(skyTri, skyMat); skyMesh.frustumCulled = false; skyMesh.renderOrder = -1000;
+scene.add(skyMesh);
+// light bag in the §5.4 units, consistent with that sky
+state.light.u = Flock.standInLight();
+state.light.u.uSunDir.value.copy(state.sun.dir);
+
+// stand-in signature grade (§5.5): x = lum/Lref → f(x) (f(1) = 0.765, f(0.06) = 0.18), cool tint, 8 % chroma, dither
+const gradeMat = new THREE.ShaderMaterial({
+  depthTest: false, depthWrite: false, uniforms: { tSrc: { value: null }, uFrame: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: `uniform sampler2D tSrc; uniform float uFrame; varying vec2 vUv;
+    float f(float x){ return 0.9652 * x / (x + 0.2617); }
+    void main(){ vec3 c = texture2D(tSrc, vUv).rgb; float l = max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-5);
+      vec3 tint = vec3(0.990, 0.995, 1.0) / dot(vec3(0.990, 0.995, 1.0), vec3(0.2126, 0.7152, 0.0722));
+      vec3 o = f(l) * (tint + 0.08 * (c / l - 1.0));
+      float n = fract(sin(dot(gl_FragCoord.xy + uFrame * 7.13, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+      gl_FragColor = vec4(o + n / 255.0, 1.0); }`,
+});
+const gradeScene = new THREE.Scene();
+const gradeMesh = new THREE.Mesh(skyTri, gradeMat); gradeMesh.frustumCulled = false; gradeScene.add(gradeMesh);
+const orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+let flock = null;
+resize();
+addEventListener('resize', resize);
+const hud = document.getElementById('hud');
+const status = (s) => { hud.textContent = s; };
+status('loading assets…');
+const files = await (await fetch('/ls?dir=assets/birds')).json();
+const assets = await Flock.loadAssets('../../assets/birds/', { files });
+flock = new Flock({ renderer, state, assets, prof });
+flock.setRenderSize(RW, RH);
+scene.add(flock.object3d);
+if (P.get('lodviz')) flock.debug.lodviz(true);
+
+// cameras
+const sunH = new THREE.Vector3(state.sun.dir.x, 0, state.sun.dir.z).normalize();
+const look = new THREE.Vector3().copy(state.flock.centroid), lookVel = new THREE.Vector3();
+let view = P.get('view') || 'default';
+function placeCamera(dt, snap) {
+  const c = state.flock.centroid;
+  // critically damped follow, 1.5 s
+  if (snap) { look.copy(c); lookVel.set(0, 0, 0); }
+  else {
+    const w = 2 / 1.5, x = w * dt, k = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+    const ch = look.clone().sub(c), tmp = lookVel.clone().addScaledVector(ch, w).multiplyScalar(dt);
+    lookVel.sub(tmp.clone().multiplyScalar(w)).multiplyScalar(k);
+    look.copy(c).add(ch.add(tmp).multiplyScalar(k));
+  }
+  const ext = state.flock.extent;
+  if (view === 'default') { camera.position.copy(sunH).multiplyScalar(-260).setY(1.7); camera.lookAt(look); }
+  else if (view === 'near') { camera.position.copy(look).addScaledVector(sunH, -120).setY(1.7); camera.lookAt(look); }
+  else if (view === 'orbit-close') {
+    const d = new THREE.Vector3(-sunH.x, -0.25, -sunH.z).normalize();
+    camera.position.copy(look).addScaledVector(d, Math.max(ext.x, ext.z) * 0.5 + 25); camera.lookAt(look);
+  } else if (view === 'inside') {
+    const v = state.flock.velocity.clone(); v.y = 0; if (v.lengthSq() < 1) v.set(1, 0, 0); v.normalize();
+    camera.position.copy(look).addScaledVector(v, -10); camera.lookAt(look.clone().addScaledVector(v, 30));
+  } else if (view === 'top') { camera.position.copy(look).add(new THREE.Vector3(0.01, 320, 0)); camera.lookAt(look); }
+  else if (view === 'falcon') {
+    const F = state.falcon, v = F.vel.clone().normalize();
+    camera.position.copy(F.pos).addScaledVector(v, -6).add(new THREE.Vector3(0, 2, 0)); camera.lookAt(F.pos.clone().addScaledVector(v, 10));
+  }
+  camera.updateMatrixWorld();
+}
+
+// frame
+let paused = !!P.get('paused'), last = performance.now(), frameNo = 0, simAcc = 0;
+const errors = [];
+addEventListener('error', (e) => errors.push(String(e.message)));
+function step(dt) { flock.update(dt, camera); }
+function renderFrame(dtReal) {
+  placeCamera(dtReal || 1 / 60);
+  flock.updateLOD(camera);
+  skyMat.uniforms.uT.value = flock.t;
+  prof.begin('scene');
+  renderer.setRenderTarget(sceneRT);
+  renderer.setClearColor(0x000000, 1);
+  renderer.clear();
+  renderer.render(scene, camera);
+  prof.begin('grade');
+  gradeMat.uniforms.tSrc.value = sceneRT.texture; gradeMat.uniforms.uFrame.value = frameNo++ % 64;
+  renderer.setRenderTarget(null);
+  renderer.render(gradeScene, orthoCam);
+  prof.end();
+}
+function loop(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (!paused) {
+    simAcc += dt;
+    let n = 0;
+    while (simAcc >= 1 / 60 && n < 2) { step(1 / 60); simAcc -= 1 / 60; n++; }
+    if (n === 2) simAcc = 0;
+  }
+  renderFrame(dt);
+  if (frameNo % 15 === 0) {
+    const s = state.flock.stats, i = flock.debug.info();
+    status(`${qName} · ${flock.N.toLocaleString()} birds · ${preset} · t ${flock.t.toFixed(1)} s · view ${view}
+LOD ${i.lodCounts.join(' / ')} (in frustum ${i.inFrustum}) · ${(i.tris / 1e6).toFixed(2)} M tris
+φ ${s.polarization.toFixed(3)} · v ${s.medianSpeed.toFixed(1)} m/s · flap/glide/bound ${(s.flap * 100).toFixed(0)}/${(s.glide * 100).toFixed(0)}/${(s.bound * 100).toFixed(0)} % · excited ${(s.excited * 100).toFixed(1)} %
+centroid ${state.flock.centroid.toArray().map((v) => v.toFixed(0)).join(', ')} · extent ${state.flock.extent.toArray().map((v) => v.toFixed(0)).join(' × ')}
+falcon ${state.falcon.state} ${state.falcon.speed.toFixed(1)} m/s`);
+  }
+  requestAnimationFrame(loop);
+}
+
+// test API
+window.T = {
+  flock, state, camera, renderer, THREE, errors, get RW() { return RW; }, get RH() { return RH; },
+  setView(v) { view = v; placeCamera(0, true); },
+  pause() { paused = true; }, resume() { paused = false; last = performance.now(); },
+  // n sim steps of dt (with updateLOD every `lodEvery` steps so readbacks keep flowing), no render
+  async tick(n, dt = 1 / 60, lodEvery = 1) {
+    for (let i = 0; i < n; i++) {
+      step(dt);
+      if (i % lodEvery === 0) { placeCamera(dt); flock.updateLOD(camera); }
+      if (i % 30 === 29) await new Promise((r) => setTimeout(r, 0));
+    }
+  },
+  render() { renderFrame(0); },
+  // close-up of bird `id` (sim paused): camera at `dist` m, from azimuth `az` (deg, relative to the bird's heading,
+  // 90 = its right side) and elevation `el` (deg)
+  async closeup(id, dist = 1.4, az = 90, el = 10, name) {
+    const { pos, vel } = await flock.debug.readAll();
+    const p = new THREE.Vector3(pos[id * 4], pos[id * 4 + 1], pos[id * 4 + 2]);
+    const f = new THREE.Vector3(vel[id * 4], 0, vel[id * 4 + 2]).normalize();
+    const r = new THREE.Vector3().crossVectors(f, new THREE.Vector3(0, 1, 0)).normalize();
+    const a = az * Math.PI / 180, e = el * Math.PI / 180;
+    const dir = f.clone().multiplyScalar(Math.cos(a)).addScaledVector(r, Math.sin(a)).multiplyScalar(Math.cos(e)).add(new THREE.Vector3(0, Math.sin(e), 0));
+    view = 'fixed';
+    camera.position.copy(p).addScaledVector(dir, dist); camera.lookAt(p); camera.updateMatrixWorld();
+    flock.lodReady = false;
+    renderFrame(0); renderFrame(0);
+    if (name) return this.capture(name);
+  },
+  async frame() { renderFrame(1 / 60); },
+  snap() { placeCamera(0, true); },
+  async capture(name) {
+    renderFrame(0);
+    const url = canvas.toDataURL('image/png');
+    return (await fetch('/capture?name=' + encodeURIComponent(name), { method: 'POST', body: url })).text();
+  },
+  // GPU ms per pass over n frames (each frame = 1 sim step + LOD + scene + grade), median per pass
+  async gpuBench(n = 60) {
+    if (!tq) return { error: 'no timer query' };
+    const was = paused; paused = true;
+    const frames = [];
+    prof.on = true;
+    for (let i = 0; i < n; i++) {
+      prof.frame = [];
+      step(1 / 60);
+      renderFrame(1 / 60);
+      prof.end();
+      frames.push(prof.frame);
+      if (i % 8 === 7) await new Promise((r) => setTimeout(r, 0));
+    }
+    prof.on = false;
+    const per = {};
+    for (const f of frames) {
+      const r = {};
+      for (const { name, q } of f) {
+        for (let k = 0; k < 400 && !gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE); k++) await new Promise((res) => setTimeout(res, 2));
+        if (!gl.getParameter(tq.GPU_DISJOINT_EXT)) r[name] = (r[name] || 0) + gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6;
+        gl.deleteQuery(q);
+      }
+      for (const k in r) (per[k] = per[k] || []).push(r[k]);
+      (per.total = per.total || []).push(Object.values(r).reduce((a, b) => a + b, 0));
+    }
+    const med = (a) => { a.sort((x, y) => x - y); return +a[a.length >> 1].toFixed(3); };
+    const p90 = (a) => +a[Math.floor(a.length * 0.9)].toFixed(3);
+    const out = { median: med(per.total.slice()), p90: p90(per.total.slice().sort((a, b) => a - b)), perPass: {} };
+    for (const k in per) if (k !== 'total') out.perPass[k] = med(per[k]);
+    paused = was; last = performance.now();
+    return out;
+  },
+  async frameP95(sec = 4) {
+    const iv = []; let prev = performance.now();
+    await new Promise((res) => { const t0 = prev; const f = (now) => { iv.push(now - prev); prev = now; if (now - t0 < sec * 1000) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+    iv.sort((a, b) => a - b);
+    return { frames: iv.length, p50: +iv[iv.length >> 1].toFixed(2), p95: +iv[Math.floor(iv.length * 0.95)].toFixed(2) };
+  },
+  // CPU ms per frame (main thread): step + updateLOD + render submit
+  cpuFrame(n = 60) {
+    const t = [];
+    for (let i = 0; i < n; i++) { const t0 = performance.now(); step(1 / 60); renderFrame(1 / 60); t.push(performance.now() - t0); }
+    t.sort((a, b) => a - b);
+    return { median: +t[n >> 1].toFixed(2), p90: +t[Math.floor(n * 0.9)].toFixed(2), bucketMs: +(flock.bucketMs || 0).toFixed(2) };
+  },
+  // behaviour plot: top (XZ) and side (XY) projections of every bird, excited birds in red; saved as a capture
+  async plot(name, span = 0) {
+    const { pos, state: st, N } = await flock.debug.readAll();
+    const c = state.flock.centroid, e = state.flock.extent;
+    span = span || Math.max(200, Math.max(e.x, e.z) * 1.3);
+    const cv = document.createElement('canvas'); cv.width = 1600; cv.height = 900;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#e8e8e6'; g.fillRect(0, 0, 1600, 900);
+    const tm = flock.t % 4096;
+    const draw = (ox, oy, w, h, ax, ay, cx, cy, sp, label) => {
+      g.save(); g.beginPath(); g.rect(ox, oy, w, h); g.clip();
+      g.fillStyle = '#fff'; g.fillRect(ox, oy, w, h);
+      const k = w / sp;
+      for (let i = 0; i < N; i++) {
+        const x = ox + w / 2 + (pos[i * 4 + ax] - cx) * k, y = oy + h / 2 - (pos[i * 4 + ay] - cy) * k;
+        const te = st[i * 4 + 3]; let a = te > -1000 ? tm - te : 1e4; if (a < -1) a += 4096;
+        g.fillStyle = a >= 0 && a < 0.6 ? 'rgba(200,40,30,0.9)' : 'rgba(20,20,22,0.35)';
+        g.fillRect(x, y, 1.2, 1.2);
+      }
+      g.fillStyle = '#333'; g.font = '14px system-ui'; g.fillText(label + `  (${sp.toFixed(0)} m across)`, ox + 8, oy + 18);
+      g.restore();
+    };
+    draw(10, 10, 785, 880, 0, 2, c.x, c.z, span, 'top: x east → , z south ↓ (flipped: north up)');
+    draw(805, 10, 785, 880, 0, 1, c.x, c.y, span, 'side: x east → , y up ↑');
+    g.fillStyle = '#333'; g.font = '14px system-ui';
+    g.fillText(`t ${flock.t.toFixed(1)} s · centroid ${c.toArray().map((v) => v.toFixed(0)).join(', ')} · extent ${e.toArray().map((v) => v.toFixed(0)).join(' × ')} · φ ${state.flock.stats.polarization.toFixed(3)}`, 20, 885);
+    const url = cv.toDataURL('image/png');
+    return (await fetch('/capture?name=' + encodeURIComponent(name), { method: 'POST', body: url })).text();
+  },
+  // pixel statistics of the canvas in a rectangle (sRGB codes)
+  pixels(x0 = 0, y0 = 0, x1, y1) {
+    renderFrame(0);
+    x1 = x1 ?? RW; y1 = y1 ?? RH;
+    const w = x1 - x0, h = y1 - y0;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d'); g.drawImage(canvas, x0, y0, w, h, 0, 0, w, h);
+    return g.getImageData(0, 0, w, h).data;
+  },
+};
+renderFrame(0);
+window.ready = true;
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
