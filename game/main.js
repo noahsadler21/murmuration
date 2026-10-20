@@ -26,7 +26,9 @@ const DIFF = {
   flock: { label: 'Flock', assist: 0.55, pace: 0.75, ramp: 1.0, tol: 1.0, gust: 0.8, dodge: 2.0, catchR: 1.0, hitR: 0.3, crossers: 1, waves: 1 },
   storm: { label: 'Storm', assist: 0.22, pace: 0.45, ramp: 1.22, tol: 0.85, gust: 2.0, dodge: 1.5, catchR: 0.85, hitR: 0.32, crossers: 1.4, waves: 1.3 },
 };
-const RUN_T = +(QS.get('runT') || 120);
+// two games: 'murm' (hold your place in the flock, 120 s) and 'fish' (Fish Frenzy: only the flying fish, 90 s)
+const runLen = (mode) => +(QS.get('runT') || (mode === 'fish' ? 90 : 120));
+let RUN_T = runLen('murm');
 // sea runs: four per run, at times and lengths drawn per run around these anchors (seconds of a 120 s run)
 function makeSweeps(R) {
   return [21, 50, 78, 103].map((a) => {
@@ -60,6 +62,7 @@ const down = new Spray(scene, U, 300, { color: [0.16, 0.14, 0.12], gravity: 0.6,
 const rings = new Rings(scene);
 const feathers = new Feathers(scene, env);
 const fishes = new FishSchool(scene, env, rings, spray);
+fishes.seaH = (x, z) => world.sea.heightAt(x, z);
 const sound = new Sound();
 const input = new Input(canvas);
 input.invertY = store.get('invertY', false);
@@ -114,6 +117,7 @@ window.addEventListener('resize', resize);
 const G = {
   mode: 'loading', t: 0, diffKey: store.get('diff', 'flock'), seed: 1,
   path: null, flock: null, player: new Player(), R: mulberry32(7),
+  gameMode: store.get('mode', 'murm') === 'fish' ? 'fish' : 'murm',
   score: 0, pathPts: 0, qSum: 0, qTime: 0, q: 0, collisions: 0, dunks: 0, fish: 0, combo: 0, bestCombo: 0, lastCatch: -99,
   hist: [], histAcc: 0, histT: 0, nextWave: 0, nextCross: 0, nextFish: 0, toasts: [], shake: 0, timeScale: 1, slowT: 0,
   fovKick: 0, flash: 0, bot: null, orbitA: 0, introT: 0, phaseShown: {}, lastQ: 1,
@@ -127,6 +131,7 @@ const heroBody = { heave: 0, surge: 0, pitch: 0 };
 function profileFor(run) {
   const D = DIFF[G.diffKey];
   if (!run) return () => ({ turn: 0.5, tau: 0.9, hold: 4 });
+  if (G.gameMode === 'fish') return () => ({ turn: 0.32 * D.ramp, tau: 1.1, hold: 5 });
   return (t) => {
     const p = clamp(t / RUN_T, 0, 1);
     const e = smooth(0.03, 0.95, p);
@@ -137,9 +142,24 @@ function profileFor(run) {
 function newWorld(run, seed) {
   G.seed = seed;
   const Rw = mulberry32(seed ^ 0x9e3779b9);
-  if (run) { SWEEPS = makeSweeps(Rw); SLOT = makeSlot(Rw); }
-  const sweeps = run ? SWEEPS : [{ t0: 24, t1: 32 }, { t0: 74, t1: 82 }, { t0: 124, t1: 132 }];
+  const frenzy = run && G.gameMode === 'fish';
+  if (run) { SWEEPS = frenzy ? [] : makeSweeps(Rw); SLOT = makeSlot(Rw); }
+  // Fish Frenzy: the flock skims the sea for the whole run
+  const sweeps = frenzy ? [{ t0: -100, t1: 1e6 }] : run ? SWEEPS : [{ t0: 24, t1: 32 }, { t0: 74, t1: 82 }, { t0: 124, t1: 132 }];
   G.path = new Path(seed, { profile: profileFor(run), sweeps, tStart: -8, alt: 27 + 10 * Rw() });
+  if (frenzy) {
+    // keep the murmuration flying alongside: steer toward a point ahead of the player and ~44 m to one side (clear of the flock's half-width),
+    // wandering freely once it is there
+    const side = Rw() < 0.5 ? -1 : 1;
+    G.path.steer = (t, s) => {
+      const P = G.player, hl = Math.hypot(P.fx, P.fz) || 1;
+      const ax = P.x + (P.fx * 22 - (P.fz / hl) * 44 * side) - s.x, az = P.z + (P.fz * 22 + (P.fx / hl) * 44 * side) - s.z;
+      if (Math.hypot(ax, az) < 14) return null;
+      const want = Math.atan2(ax, az);
+      let d = want - s.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+      return d * 0.9;
+    };
+  }
   const D = DIFF[G.diffKey];
   const dims = { A: 16 + 6 * Rw(), W: 21 + 8 * Rw(), H: 2.6 + 0.8 * Rw() };
   G.flock = new Flock({ N: N_BIRDS, seed, path: G.path, slot: SLOT, dims });
@@ -194,7 +214,13 @@ function setMode(m) {
 
 function startRun(opts = {}) {
   if (opts.diff) G.diffKey = opts.diff;
-  store.set('diff', G.diffKey);
+  if (opts.mode) G.gameMode = opts.mode;
+  store.set('diff', G.diffKey); store.set('mode', G.gameMode);
+  RUN_T = runLen(G.gameMode);
+  document.body.dataset.game = G.gameMode;
+  $('capTop').textContent = G.gameMode === 'fish' ? 'fish caught' : 'in line';
+  $('capFish').textContent = G.gameMode === 'fish' ? 'Chain' : 'Fish';
+  $('capHits').textContent = G.gameMode === 'fish' ? 'Leapt' : 'Hits';
   sound.start();
   const seed = opts.seed ?? ((Math.random() * 1e9) | 0);
   newWorld(true, seed);
@@ -216,31 +242,54 @@ function startRun(opts = {}) {
   setMode(introLen > 0 ? 'intro' : 'play');
   $('count').classList.toggle('hidden', introLen <= 0);
   renderTimeline();
+  if (G.gameMode === 'fish' && introLen <= 0) G.nextFish = 0.5;
 }
 
 function endRun() {
   setMode('end');
   for (const f of floaters) f.el.remove();
   floaters.length = 0;
+  const frenzy = G.gameMode === 'fish';
   const pct = G.qTime > 0 ? 100 * G.qSum / G.qTime : 0;
   const eff = pct - 2 * G.collisions - 1.5 * G.dunks;
-  const grade = eff >= 93 ? 'S' : eff >= 85 ? 'A' : eff >= 74 ? 'B' : eff >= 60 ? 'C' : 'D';
-  const key = 'best.' + G.diffKey;
+  // Fish Frenzy grades on fish per minute (the catch count scaled to a 90 s run)
+  const fpm = G.fish * 90 / RUN_T;
+  const grade = frenzy ? (fpm >= 42 ? 'S' : fpm >= 30 ? 'A' : fpm >= 20 ? 'B' : fpm >= 11 ? 'C' : 'D')
+    : eff >= 93 ? 'S' : eff >= 85 ? 'A' : eff >= 74 ? 'B' : eff >= 60 ? 'C' : 'D';
+  const key = (frenzy ? 'best.fish.' : 'best.') + G.diffKey;
   const best = store.get(key, 0);
   const score = Math.round(G.score);
   if (score > best) store.set(key, score);
   $('rGrade').textContent = grade;
   $('rGrade').dataset.g = grade;
-  $('rPct').textContent = pct.toFixed(1) + '%';
-  $('rHits').textContent = String(G.collisions) + (G.dunks ? ` + ${G.dunks} splashdown${G.dunks > 1 ? 's' : ''}` : '');
-  $('rFish').textContent = `${G.fish}` + (G.bestCombo > 1 ? ` · best chain ×${G.bestCombo}` : '');
+  $('rPctL').textContent = frenzy ? 'Flying fish caught' : 'In line with the flock';
+  $('rHitsL').textContent = frenzy ? 'Best chain' : 'Collisions';
+  $('rFishL').textContent = frenzy ? 'Splashdowns · collisions' : 'Flying fish';
+  if (frenzy) {
+    $('rPct').textContent = `${G.fish} of ${fishes.spawned}`;
+    $('rHits').textContent = G.bestCombo > 1 ? `×${G.bestCombo}` : '–';
+    $('rFish').textContent = `${G.dunks} · ${G.collisions}`;
+  } else {
+    $('rPct').textContent = pct.toFixed(1) + '%';
+    $('rHits').textContent = String(G.collisions) + (G.dunks ? ` + ${G.dunks} splashdown${G.dunks > 1 ? 's' : ''}` : '');
+    $('rFish').textContent = `${G.fish}` + (G.bestCombo > 1 ? ` · best chain ×${G.bestCombo}` : '');
+  }
+  $('rTitle').textContent = frenzy ? 'Fish Frenzy over' : 'Run complete';
+  $('sparkCap').textContent = frenzy ? 'fish caught, second by second' : 'in line, second by second (sea runs shaded)';
   $('rScore').textContent = score.toLocaleString();
   $('rBest').textContent = score > best ? 'new best' : 'best ' + best.toLocaleString();
   $('rDiff').textContent = DIFF[G.diffKey].label;
-  $('rLine').textContent = gradeLine(grade, pct);
+  $('rLine').textContent = frenzy ? frenzyLine(grade) : gradeLine(grade, pct);
   drawSpark();
   sound.chime(grade === 'S' || grade === 'A');
   G.result = { grade, pct, collisions: G.collisions, dunks: G.dunks, fish: G.fish, score };
+}
+function frenzyLine(g) {
+  if (g === 'S') return 'A gannet would be jealous. Hardly a fish got back to the water.';
+  if (g === 'A') return 'Sharp timing on the dives. The sea run was yours.';
+  if (g === 'B') return 'A good haul. Lead the fish a little more and the chains will grow.';
+  if (g === 'C') return 'Some catches. Watch for the dark shapes under the surface and dive early.';
+  return 'The fish got away this time. Aim where the fish will be, not where it is.';
 }
 function gradeLine(g, pct) {
   if (g === 'S') return 'Indistinguishable from the flock. A real starling would not notice you.';
@@ -347,7 +396,8 @@ function frame(dtReal) {
   const F = G.flock, P = G.player;
   if (running) G.t += dt;
   const t = G.t;
-  G.path.ensure(t + 9);
+  // Fish Frenzy steers the flock toward the player, so it plans only a little ahead
+  G.path.ensure(t + (G.gameMode === 'fish' && G.mode !== 'title' && G.mode !== 'end' ? 1.2 : 9));
   // difficulty ramp on the flock itself
   const p = clamp(t / RUN_T, 0, 1);
   F.fold = G.mode === 'title' || G.mode === 'end' ? 1.5 : 0.55 + 0.95 * smooth(0.05, 0.9, p) * D.ramp;
@@ -360,13 +410,13 @@ function frame(dtReal) {
       if (playing && !G.phaseShown.wave) { G.phaseShown.wave = 1; setTimeout(() => toast('A wave is running through the flock', 'info'), 1200); }
       G.nextWave = t + (G.mode === 'title' ? 5 : lerp(9, 3.2, p) / D.waves) * (0.75 + 0.5 * G.R());
     }
-    if (playing && t >= G.nextCross) {
+    if (playing && G.gameMode !== 'fish' && t >= G.nextCross) {
       const i = F.addCrosser(t, G.R, F.slot);
       if (i >= 0 && !G.phaseShown.cross) { G.phaseShown.cross = 1; toast('Watch out: neighbours drifting through your lane', 'info', 2.6); }
       G.nextCross = t + lerp(8, 3, p) / D.crossers * (0.7 + 0.6 * G.R());
     }
-    if (t >= G.nextFish) spawnFish(t);
-    if (playing) {
+    if (t >= G.nextFish) (G.gameMode === 'fish' && G.mode !== 'title' ? spawnFrenzy(t) : spawnFish(t));
+    if (playing && G.gameMode !== 'fish') {
       for (const s of SWEEPS) {
         const k = 'sw' + s.t0;
         if (t > s.t0 - 2.5 && !G.phaseShown[k]) { G.phaseShown[k] = 1; toast('Sea run — dive for the flying fish', 'fish', 2.6); sound.chime(true); }
@@ -388,7 +438,11 @@ function frame(dtReal) {
       G.introT += dtReal;
       const c = Math.ceil(G.introLen - G.introT);
       $('count').textContent = c > 0 ? String(c) : 'Go';
-      if (G.introT >= G.introLen) { setMode('play'); $('count').textContent = 'Go'; setTimeout(() => $('count').classList.add('hidden'), 500); toast('Hold your place in the flock', 'info'); }
+      if (G.introT >= G.introLen) {
+        setMode('play'); $('count').textContent = 'Go'; setTimeout(() => $('count').classList.add('hidden'), 500);
+        toast(G.gameMode === 'fish' ? 'Catch the flying fish. Quick catches chain for more.' : 'Hold your place in the flock', 'info', 2.6);
+        if (G.gameMode === 'fish') G.nextFish = t + 0.3;
+      }
     } else if (playing) {
       const inp = G.bot ? (input.override = botInput(), input.read()) : input.read();
       const n = Math.max(1, Math.ceil(dt / (1 / 120)));
@@ -396,9 +450,10 @@ function frame(dtReal) {
       for (let k = 0; k < n; k++) {
         const ex = P.x - tmpS.x, ey = P.y - tmpS.y, ez = P.z - tmpS.z;
         const along = ex * S.fx + ey * S.fy + ez * S.fz;
-        P.step(h, inp, S, S.v, along, D, G.R, onDunk);
+        P.seaY = world.sea.heightAt(P.x, P.z);
+        P.step(h, inp, S, S.v, along, G.gameMode === 'fish' ? FRENZY_FLIGHT[G.diffKey] : D, G.R, onDunk);
       }
-      grade(dt, S, D);
+      if (G.gameMode === 'fish') frenzyTick(dt); else grade(dt, S, D);
       if (t >= RUN_T) { endRun(); }
     }
   }
@@ -425,13 +480,13 @@ function frame(dtReal) {
     hero.push(P.x + P.fx * bd.surge * fl, P.y + P.sinkY + bd.heave * fl, P.z + P.fz * bd.surge * fl, 1, qtmp, P.phase, P.glide, P.bound);
     const off = G.mode === 'play' && G.dist !== undefined ? G.dist : 0;
     const camD = camera.position.distanceTo(_v.set(tmpS.x, tmpS.y, tmpS.z));
-    const ga = G.mode === 'play' ? smooth(0.9, 2.2, off) * smooth(1.2, 2.6, camD) * 0.6 : 0;
+    const ga = G.mode === 'play' && G.gameMode !== 'fish' ? smooth(0.9, 2.2, off) * smooth(1.2, 2.6, camD) * 0.6 : 0;
     if (ga > 0.01) {
       quatFromFwdRoll(qtmp, S.fx, S.fy, S.fz, tmpS.bank);
       ghost.push(tmpS.x, tmpS.y, tmpS.z, 1, qtmp, (t * 13.3) % 1, 0.2, 0);
     }
     ghost.uniforms.uGhostA.value = ga;
-    updateGuide(t, off);
+    if (G.gameMode !== 'fish') updateGuide(t, off); else { guide.pts.visible = false; for (const h of hoops) h.mesh.visible = false; }
   } else { guide.pts.visible = false; for (const h of hoops) h.mesh.visible = false; }
   hero.end(); ghost.end();
 }
@@ -460,7 +515,8 @@ function onHit(i, x, y, z) {
   const P = G.player, F = G.flock;
   F.knock(i, P.vx, P.vy, P.vz, G.R);
   P.hit(G.R);
-  G.collisions++; G.score = Math.max(0, G.score - 120); G.combo = 0;
+  const frenzy = G.gameMode === 'fish';
+  G.collisions++; if (!frenzy) G.score = Math.max(0, G.score - 120); G.combo = 0; G.lastCatch = -99;
   feathers.burst(x, y, z, P.vx, P.vy, P.vz, 18, G.R);
   for (let k = 0; k < 40; k++) {
     const a = G.R() * 6.283, b = G.R() * 2 - 1, sp = 0.6 + G.R() * 2.6;
@@ -469,18 +525,19 @@ function onHit(i, x, y, z) {
   feathers.burst(P.x, P.y, P.z, P.vx, P.vy, P.vz, 5, G.R);
   sound.hit();
   G.shake = 0.5; G.flash = 1; G.slowT = Math.max(G.slowT, 0.09);
-  floatText('−120', x, y + 0.3, z, 'bad');
-  if (G.collisions === 1) toast('Collision! That bird is going down', 'warn', 1.8);
+  floatText(frenzy ? 'chain broken' : '−120', x, y + 0.3, z, 'bad');
+  if (G.collisions === 1) toast(frenzy ? 'Collision! It cost you your chain' : 'Collision! That bird is going down', 'warn', 1.8);
 }
 function onDunk(x, z) {
-  G.dunks++; G.score = Math.max(0, G.score - 80);
+  const frenzy = G.gameMode === 'fish';
+  G.dunks++; if (!frenzy) G.score = Math.max(0, G.score - 80); G.combo = 0; G.lastCatch = -99;
   rings.ring(x, z, 2.2, 1.5, 0.6); spray.splash(x, z, 1.4, G.R); sound.splash(1);
   G.shake = 0.35;
-  floatText('splash −80', x, 0.8, z, 'bad');
+  floatText(frenzy ? 'splash: chain broken' : 'splash −80', x, 0.8 + world.sea.heightAt(x, z), z, 'bad');
 }
 function onCatch(f) {
   const t = G.t;
-  G.combo = t - G.lastCatch < 4 ? G.combo + 1 : 1;
+  G.combo = t - G.lastCatch < CHAIN_S ? G.combo + 1 : 1;
   G.lastCatch = t;
   G.bestCombo = Math.max(G.bestCombo, G.combo);
   G.fish++;
@@ -494,6 +551,39 @@ function onCatch(f) {
   G.slowT = 0.16; G.fovKick = 5;
   floatText(G.combo > 1 ? `+${pts}  ×${G.combo}` : `+${pts}`, f.x, f.y + 0.35, f.z, 'good');
   const el = $('sFish'); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+}
+
+const CHAIN_S = 4;
+// Fish Frenzy flight: no pull toward a place in the flock, a light flocking instinct so a centred stick flies on with
+// the birds, and the same gusts as the chosen flight
+const FRENZY_FLIGHT = Object.fromEntries(Object.entries(DIFF).map(([k, d]) => [k, { ...d, assist: d.assist * 0.35, pace: 0 }]));
+
+// Fish Frenzy: fish leap all around where you will be in two to three seconds, alone, in pairs, or now and then a
+// whole school fanning out at once
+function spawnFrenzy(t) {
+  const R = G.R, P = G.player, D = DIFF[G.diffKey];
+  const hl = Math.hypot(P.fx, P.fz) || 1, fx = P.fx / hl, fz = P.fz / hl, rx = -fz, rz = fx;
+  const school = R() < 0.1;
+  const n = school ? 5 + Math.floor(R() * 3) : R() < 0.4 ? 2 : 1;
+  const lead = 2.1 + R() * 1.2;
+  const sp = Math.hypot(P.vx, P.vz);
+  const cx = P.x + fx * sp * lead, cz = P.z + fz * sp * lead;
+  const lat0 = (R() - 0.5) * 2 * (school ? 6 : 13), al0 = (R() - 0.4) * 14;
+  for (let k = 0; k < n; k++) {
+    const lat = lat0 + (school ? (k - n / 2) * 1.6 : (R() - 0.5) * 3), al = al0 + (R() - 0.5) * (school ? 3 : 6);
+    const ang = (R() - 0.5) * (school ? 0.5 : 1.6) + (school ? 0 : (R() - 0.5) * 0.6);
+    const dx = fx * Math.cos(ang) - rx * Math.sin(ang), dz = fz * Math.cos(ang) - rz * Math.sin(ang);
+    const qx = cx + rx * lat + fx * al, qz = cz + rz * lat + fz * al;
+    fishes.spawn(t, t + lead + k * (school ? 0.12 : 0.3), qx, world.sea.heightAt(qx, qz) + 1.2 + R() * 3, qz, dx, dz, 7 + R() * 4, R);
+  }
+  if (school && !G.phaseShown.school) { G.phaseShown.school = 1; toast('A whole school is breaking the surface', 'fish', 2.2); }
+  G.nextFish = t + (0.55 + R() * 0.75) / Math.sqrt(D.ramp);
+}
+function frenzyTick(dt) {
+  // the top bar shows how long the current chain stays open
+  G.q = G.combo > 0 ? clamp(1 - (G.t - G.lastCatch) / CHAIN_S, 0, 1) : 0;
+  G.histAcc += 0; G.histT += dt;
+  if (G.histT >= 1) { G.hist.push(G.fish); G.histT = 0; }
 }
 
 function spawnFish(t) {
@@ -591,7 +681,7 @@ function updateCamera(dt, S) {
   if (!camState.off) camState.off = want.clone();
   camState.off.lerp(want, 1 - Math.exp(-dt / 0.08));
   let pos = new THREE.Vector3(P.x, P.y, P.z).add(camState.off);
-  pos.y = Math.max(pos.y, 0.5);
+  pos.y = Math.max(pos.y, world.sea.heightAt(pos.x, pos.z) + 0.45);
   let lk = _v.set(P.x + cf.x * 5, P.y + cf.y * 5 + 0.4, P.z + cf.z * 5).clone();
   if (G.mode === 'intro') {
     const k = smooth(0, 1, G.introT / Math.max(0.01, G.introLen * 0.8));
@@ -622,13 +712,14 @@ let fpsE = 60;
 function hud(dtReal) {
   const P = G.player;
   if (G.mode === 'play' || G.mode === 'intro' || G.mode === 'paused') {
+    const frenzy = G.gameMode === 'fish';
     const pct = G.qTime > 0.2 ? 100 * G.qSum / G.qTime : 100;
-    $('pct').textContent = G.mode === 'intro' ? '–' : pct.toFixed(0);
-    $('qfill').style.width = (100 * (G.mode === 'intro' ? 1 : G.q)) + '%';
-    $('hud').dataset.q = G.q > 0.75 ? 'good' : G.q > 0.3 ? 'mid' : 'bad';
+    $('pct').textContent = frenzy ? String(G.fish) : G.mode === 'intro' ? '–' : pct.toFixed(0);
+    $('qfill').style.width = (100 * (frenzy ? G.q : G.mode === 'intro' ? 1 : G.q)) + '%';
+    $('hud').dataset.q = frenzy ? 'good' : G.q > 0.75 ? 'good' : G.q > 0.3 ? 'mid' : 'bad';
     $('sScore').textContent = Math.round(G.score).toLocaleString();
-    $('sFish').textContent = G.fish;
-    $('sHits').textContent = G.collisions + G.dunks;
+    $('sFish').textContent = frenzy ? (G.combo > 1 && G.q > 0 ? '×' + G.combo : '–') : G.fish;
+    $('sHits').textContent = frenzy ? fishes.spawned : G.collisions + G.dunks;
     const rem = Math.max(0, RUN_T - Math.max(0, G.t));
     $('sTime').textContent = `${Math.floor(rem / 60)}:${String(Math.floor(rem % 60)).padStart(2, '0')}`;
     $('tlFill').style.width = (100 * clamp(G.t / RUN_T, 0, 1)) + '%';
@@ -660,7 +751,7 @@ function drawOverlay() {
   // fish in the air: a thin ring around each; fish about to leap: a small tick on the water
   for (const f of fishes.list) {
     if (f.state !== 'air' && f.state !== 'lurk') continue;
-    const x = f.state === 'air' ? f.x : f.bx, y = f.state === 'air' ? f.y : 0, z = f.state === 'air' ? f.z : f.bz;
+    const x = f.state === 'air' ? f.x : f.bx, y = f.state === 'air' ? f.y : world.sea.heightAt(f.bx, f.bz), z = f.state === 'air' ? f.z : f.bz;
     const v = _v.set(x, y, z).project(camera);
     if (v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) continue;
     const d = camera.position.distanceTo(_w.set(x, y, z));
@@ -676,7 +767,7 @@ function drawOverlay() {
   }
   octx.globalAlpha = 1;
   // where is my place? when the slot leaves the screen, an arrow at the edge points back to it
-  if (G.mode === 'play') {
+  if (G.mode === 'play' && G.gameMode !== 'fish') {
     const v = _v.set(tmpS.x, tmpS.y, tmpS.z).project(camera);
     const behind = v.z > 1;
     let x = v.x, y = v.y;
@@ -717,6 +808,15 @@ function drawSpark() {
   c.width = W * dpr; c.height = H * dpr; x.scale(dpr, dpr);
   x.clearRect(0, 0, W, H);
   const h = G.hist; if (h.length < 2) return;
+  if (G.gameMode === 'fish') {
+    // cumulative catch curve
+    const top = Math.max(1, h[h.length - 1]);
+    x.strokeStyle = '#e0672a'; x.lineWidth = 1.6; x.lineJoin = 'round';
+    x.beginPath();
+    h.forEach((n, i) => { const px = (i + 0.5) / RUN_T * W, py = H - 2 - (n / top) * (H - 6); i ? x.lineTo(px, py) : x.moveTo(px, py); });
+    x.stroke();
+    return;
+  }
   // sea runs as faint bands behind the line
   x.fillStyle = 'rgba(47,58,74,0.07)';
   for (const s of SWEEPS) x.fillRect(W * s.t0 / RUN_T, 0, W * (s.t1 - s.t0) / RUN_T, H);
@@ -755,8 +855,19 @@ document.querySelectorAll('[data-diff]').forEach((b) => {
     $('bestLine').textContent = bestText();
   });
 });
-function bestText() { const b = store.get('best.' + G.diffKey, 0); return b ? `Best on ${DIFF[G.diffKey].label}: ${b.toLocaleString()}` : ''; }
-$('bestLine').textContent = bestText();
+function bestText() {
+  const b = store.get((G.gameMode === 'fish' ? 'best.fish.' : 'best.') + G.diffKey, 0);
+  return b ? `Best on ${DIFF[G.diffKey].label}: ${b.toLocaleString()}` : '';
+}
+function syncModeButtons() {
+  document.querySelectorAll('[data-game]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.game === G.gameMode)));
+  $('modeLine').textContent = G.gameMode === 'fish'
+    ? 'Fish Frenzy: the flock skims the sea for 90 seconds and flying fish leap all around. Catch as many as you can; quick catches chain.'
+    : 'Murmuration: two minutes inside the flock. Hold your place, miss your neighbours, and dive for fish on the sea runs.';
+  $('bestLine').textContent = bestText();
+}
+document.querySelectorAll('[data-game]').forEach((b) => b.addEventListener('click', () => { G.gameMode = b.dataset.game; store.set('mode', G.gameMode); syncModeButtons(); }));
+syncModeButtons();
 $('birdCount').textContent = N_BIRDS.toLocaleString();
 $('fly').addEventListener('click', () => startRun());
 $('again').addEventListener('click', () => startRun());
@@ -783,7 +894,7 @@ $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) pause
 
 // ------------------------------------------------------------------------------------------------ test / debug API
 window.game = {
-  G, DIFF, get SLOT() { return SLOT; }, get SWEEPS() { return SWEEPS; }, RUN_T, fishes, input, camera, scene, renderer, get lods() { return lods; }, get hero() { return hero; }, get ghost() { return ghost; },
+  G, DIFF, get SLOT() { return SLOT; }, get SWEEPS() { return SWEEPS; }, get RUN_T() { return RUN_T; }, fishes, input, camera, scene, renderer, get lods() { return lods; }, get hero() { return hero; }, get ghost() { return ghost; },
   start: (o) => startRun(o),
   bot: (m) => { G.bot = m || null; if (!m) input.override = null; },
   // advance the simulation in fixed steps without waiting for frames (headless tests)

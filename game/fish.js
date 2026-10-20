@@ -46,7 +46,7 @@ function finGeometry(pts, color) {
 }
 
 export class FishSchool {
-  constructor(scene, env, rings, spray, max = 16) {
+  constructor(scene, env, rings, spray, max = 30) {
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.65, roughness: 0.28, envMap: env, envMapIntensity: 1.25, flatShading: true });
     const finMat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.2, roughness: 0.45, envMap: env, envMapIntensity: 1.0,
       side: THREE.DoubleSide, transparent: true, opacity: 0.86, flatShading: true });
@@ -80,6 +80,7 @@ export class FishSchool {
       this.list.push({ root, fins, tail: t, state: 'off', x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, t: 0 });
     }
     this.rings = rings; this.spray = spray;
+    this.seaH = () => 0;   // surface height at (x, z); the game plugs in the wave field
     this.caught = 0; this.missed = 0; this.spawned = 0;
     this._v = new THREE.Vector3(); this._m = new THREE.Matrix4(); this._up = new THREE.Vector3(0, 1, 0);
   }
@@ -115,7 +116,7 @@ export class FishSchool {
       if (f.state === 'lurk') {
         f.root.visible = false;
         if (now >= f.tB) {
-          f.state = 'air'; f.x = f.bx; f.y = 0; f.z = f.bz;
+          f.state = 'air'; f.x = f.bx; f.y = this.seaH(f.bx, f.bz); f.z = f.bz;
           f.vx = f.dx * f.vh; f.vz = f.dz * f.vh; f.vy = f.vy0; f.age = 0;
           this.rings.ring(f.x, f.z, 1.6, 1.2, 0.6);
           this.spray.splash(f.x, f.z, 0.8, R);
@@ -132,7 +133,7 @@ export class FishSchool {
           const k = Math.exp(-dt * 0.12); f.vx *= k; f.vz *= k;
         } else f.vy -= G * dt;
         f.x += f.vx * dt; f.y += f.vy * dt; f.z += f.vz * dt;
-        if (f.y < 0 && f.vy < 0) {
+        if (f.vy < 0 && f.y < this.seaH(f.x, f.z)) {
           f.state = 'off'; this.missed++;
           this.rings.ring(f.x, f.z, 1.3, 1.1, 0.45);
           this.spray.splash(f.x, f.z, 0.5, R);

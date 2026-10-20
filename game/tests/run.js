@@ -75,6 +75,15 @@ const check = (name, ok, info) => { checks.push({ name, ok: !!ok, info }); conso
     out.fps = (await s.evalp('JSON.stringify(game.stats())'));
     console.log('fps sample', out.fps);
 
+    // Fish Frenzy: 90 s of fish only, graded on the catch
+    r = JSON.parse(await s.evalp(`game.input.override = null; game.start({seed: 26, mode: 'fish', diff: 'flock', skipIntro: true}); game.bot('fish'); JSON.stringify(game.advance(95))`));
+    out.frenzy = r;
+    check('Fish Frenzy runs 90 s and ends', r.mode === 'end' && Math.abs(r.t - 90) < 0.5, { t: r.t });
+    check('Fish Frenzy: lots of fish leap and the bot catches some', r.fishSpawned > 120 && r.fish >= 5, { leapt: r.fishSpawned, caught: r.fish, grade: r.result && r.result.grade });
+    check('Fish Frenzy results screen', await s.evalp(`document.getElementById('rTitle').textContent === 'Fish Frenzy over' && /of/.test(document.getElementById('rPct').textContent)`),
+      { pct: await s.evalp(`document.getElementById('rPct').textContent`) });
+    await s.evalp(`game.G.gameMode = 'murm'; 1`);
+
     // asset contract read defensively: a future rebake with variants and fewer keys still yields a usable layout
     const nm = JSON.parse(await s.evalp(`import('/game/birds.js').then((m) => JSON.stringify([
       m.normalizeMeta({ verts: 46, variants: 4, rows: 130, buffers: { index: {}, uv: { count: 92 }, vatPos: { count: 46 * 130 * 4 }, vatNrm: {} } }, 'v'),

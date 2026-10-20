@@ -138,8 +138,10 @@ export class Player {
     g.x += (g.tx - g.x) * (1 - Math.exp(-dt / 0.9)); g.z += (g.tz - g.z) * (1 - Math.exp(-dt / 0.9));
     this.vx = this.fx * this.speed + g.x; this.vy = this.fy * this.speed; this.vz = this.fz * this.speed + g.z;
     this.x += this.vx * dt; this.y += this.vy * dt; this.z += this.vz * dt;
-    if (this.y < 0.45) {
-      this.y = 0.45;
+    // the sea surface under the bird (set by the game from the wave field each frame)
+    const floorY = (this.seaY || 0) + 0.45;
+    if (this.y < floorY) {
+      this.y = floorY;
       if (this.pitch < 0.1) { this.pitch = 0.42; this.speed *= 0.7; this.dunks++; if (onDunk) onDunk(this.x, this.z); }
     }
     if (this.y > 140) { this.y = 140; this.pitch = Math.min(this.pitch, 0); }

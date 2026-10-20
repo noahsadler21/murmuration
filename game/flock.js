@@ -67,7 +67,10 @@ export class Path {
       s.target = straight ? (R() - 0.5) * 0.2 * P.turn : sign * P.turn * (0.4 + 0.6 * R());
       s.nextT = t + P.hold * (0.65 + 0.7 * R());
     }
-    s.yawRate += (s.target - s.yawRate) * (1 - Math.exp(-dt / P.tau));
+    // an optional steer (Fish Frenzy: keep the flock around the player) overrides the manoeuvre plan
+    const st = this.steer ? this.steer(t, s) : null;
+    const target = st === null ? s.target : Math.max(-P.turn * 2.5, Math.min(P.turn * 2.5, st));
+    s.yawRate += (target - s.yawRate) * (1 - Math.exp(-dt / P.tau));
     s.yaw += s.yawRate * dt;
     const vyT = Math.max(-8.5, Math.min(5, (this.altTarget(t) - s.y) * 0.45));
     const pT = Math.asin(Math.max(-0.62, Math.min(0.45, vyT / s.v)));

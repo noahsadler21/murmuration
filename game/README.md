@@ -18,6 +18,10 @@ of 4,000 (1,600 on phones), flying over a grey-blue sea under a bright overcast 
 - Every run is different: the flock's path, its altitude rhythm, its shape and folding, the timing of the sea runs and
   your place in the flock are all drawn from a fresh seed.
 
+**Fish Frenzy** is the second game on the start screen: 90 seconds with the flock skimming the sea beside you and
+flying fish leaping all around, alone, in pairs or as whole schools. Only the fish count. Catches within four seconds
+chain (×2, ×3, ...); a splashdown or a collision breaks the chain. It is graded on fish caught.
+
 Flights: **Calm** (strong flocking instinct, wide tube), **Flock**, **Storm** (gusts, tight tube, slow neighbours).
 
 ## Controls
@@ -44,7 +48,7 @@ node game/tests/run.js
 loads the page in headless Chrome/Edge and plays scripted runs: a bot that follows the guide (high in-line %), no
 input (poor grade), a bot that rams its neighbours (collisions, falling birds), a fish-diving bot, real keyboard
 events, the countdown and the HUD. Results go to `game/tests/results.json`, screenshots to `captures/`.
-`node game/tests/look.js` saves a look sheet, `node game/tests/hero.js` a close-up of your bird's wingbeat; `node game/tests/shot.js "<query>" out.png "<js>"` one screenshot.
+`node game/tests/look.js` saves a look sheet, `node game/tests/hero.js` a close-up of your bird's wingbeat, `node game/tests/frenzy.js` a Fish Frenzy sheet; `node game/tests/shot.js "<query>" out.png "<js>"` one screenshot.
 
 ## How it works
 
@@ -62,6 +66,11 @@ events, the countdown and the HUD. Results go to `game/tests/results.json`, scre
 - `birds.js` / `shaders.js`: the project's `murm-vat-1` starlings from `../assets/birds/` as instanced
   vertex-animation meshes (real scan close up for your bird, retro / silhouette / micro LODs for the flock, with the
   main page's min-pixel widening and screen-space dilation for far birds).
+- `sea.js`: the open sea. A camera-centred radial grid displaced by eight Gerstner waves (a moderate wind sea), a
+  tileable ripple normal map built at start-up from a wind-wave spectrum and sampled at four scales with mipmaps
+  (so the far sea averages out instead of shimmering), Fresnel reflection of the overcast, light scattered through
+  steep wave faces and sparse whitecaps where crests pinch. The same waves run on the CPU, so dunks, splashes and
+  fish leaps sit on the real surface.
 - `fish.js`, `fx.js`, `audio.js`: procedural low-poly flying fish, sea and sky, spray, rings, feathers, synthesized
   sound (no files).
 

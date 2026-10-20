@@ -4,7 +4,7 @@
 // (position, orientation quaternion, wing phase / glide / bound) instead of the main page's GPU sim textures.
 
 // shared lighting / haze chunk (colours are linear; the renderer output is sRGB via linearToOutputTexel)
-const LIGHT = /* glsl */`
+export const LIGHT = /* glsl */`
 uniform vec3 uSkyUp, uSkyDown, uFogCol, uHorizon, uZenith;
 uniform float uFogK;
 vec3 hemi(vec3 n) { return mix(uSkyDown, uSkyUp, clamp(n.y * 0.5 + 0.5, 0.0, 1.0)); }
@@ -200,62 +200,6 @@ void main() {
   vec3 col = d.y >= 0.0 ? mix(uHorizon, uZenith, pow(clamp(d.y, 0.0, 1.0), 0.7)) : uFogCol;
   vec3 o = linearToOutputTexel(vec4(col, 1.0)).rgb;
   o += (h12(gl_FragCoord.xy) - 0.5) / 255.0;     // dither: the sky is a near-flat field
-  gl_FragColor = vec4(o, 1.0);
-}
-`;
-
-// sea: dark grey-blue water reflecting the overcast, with analytic wind waves fading out with distance
-export const SEA_VERT = /* glsl */`
-varying vec3 vW;
-void main() {
-  vec4 w = modelMatrix * vec4(position, 1.0);
-  vW = w.xyz;
-  gl_Position = projectionMatrix * viewMatrix * w;
-}
-`;
-export const SEA_FRAG = /* glsl */`
-precision highp float;
-${LIGHT}
-uniform vec3 uDeep, uShallow;
-uniform float uTime;
-varying vec3 vW;
-float h12(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-uniform float uPxPerM;
-// wind sea: a dozen directional waves around the wind, each faded once a pixel covers more than a third of its length
-// (a cheap mip that keeps the far sea from shimmering into rings)
-vec2 waveGrad(vec2 p, float t, float fp) {
-  vec2 g = vec2(0.0);
-  float lam = 46.0, amp = 0.55, ang = 0.35;
-  for (int i = 0; i < 12; i++) {
-    vec2 dir = vec2(cos(ang), sin(ang));
-    float k = 6.2831853 / lam; float w = sqrt(9.81 * k);
-    float f = clamp(1.0 - fp * 3.0 / lam, 0.0, 1.0);
-    g += dir * (amp * k * cos(k * dot(dir, p) - w * t + float(i) * 2.399)) * f;
-    lam *= 0.68; amp *= 0.66;
-    ang += 2.399 * (0.35 + 0.1 * float(i % 3));      // golden-angle spread, biased around the wind
-  }
-  return g;
-}
-void main() {
-  vec3 dv = vW - cameraPosition;
-  float dist = length(dv);
-  float graze = max(abs(cameraPosition.y - vW.y) / max(dist, 1e-3), 0.035);
-  float fp = dist / uPxPerM / graze;
-  vec2 g = waveGrad(vW.xz, uTime, fp);
-  vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
-  vec3 V = -dv / max(dist, 1e-3);
-  float nv = clamp(dot(n, V), 0.0, 1.0);
-  float fres = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
-  vec3 R = reflect(-V, n);
-  vec3 sky = R.y >= 0.0 ? mix(uHorizon, uZenith, pow(clamp(R.y, 0.0, 1.0), 0.7)) : uHorizon * 0.7;
-  // body colour: a little lighter on the wave faces turned toward the sky (overcast upwelling)
-  vec3 body = mix(uDeep, uShallow, clamp(0.5 + dot(n.xz, normalize(vec2(0.6, 0.8))) * 4.0, 0.0, 1.0));
-  vec3 col = mix(body, sky, fres);
-  // aerial haze toward a slightly darker horizon band than the sky, so the sea line reads crisp but soft
-  float f = 1.0 - exp(-uFogK * 0.75 * dist);
-  col = mix(col, uFogCol, f);
-  vec3 o = linearToOutputTexel(vec4(col, 1.0)).rgb;
-  o += (h12(gl_FragCoord.xy) - 0.5) / 255.0;
   gl_FragColor = vec4(o, 1.0);
 }
 `;

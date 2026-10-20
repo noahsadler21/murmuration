@@ -1,6 +1,7 @@
 // fx.js: sky dome, sea, spray, splash rings, fish shadows and loose feathers.
 import * as THREE from 'three';
 import * as SH from './shaders.js';
+import { Sea } from './sea.js';
 
 const srgb = (r, g, b) => new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
 
@@ -9,8 +10,10 @@ export const LOOK = {
   horizon: srgb(192, 193, 195),
   zenith: srgb(201, 202, 204),
   fog: srgb(168, 173, 179),          // sea haze toward the horizon, a little darker than the sky so the sea line reads
-  deep: srgb(34, 44, 56),
+  deep: srgb(28, 38, 50),
   shallow: srgb(52, 64, 77),
+  scatter: srgb(34, 62, 68),
+  foam: srgb(186, 192, 197),
   skyUp: srgb(196, 197, 198),
   skyDown: srgb(70, 80, 90),
   accent: srgb(240, 118, 52),
@@ -37,17 +40,11 @@ export class World {
     sky.renderOrder = -10; sky.frustumCulled = false;
     this.sky = sky;
     scene.add(sky);
-    this.seaU = { ...U, uDeep: { value: LOOK.deep.clone() }, uShallow: { value: LOOK.shallow.clone() }, uTime: { value: 0 } };
-    const sea = new THREE.Mesh(new THREE.PlaneGeometry(12000, 12000, 1, 1), new THREE.ShaderMaterial({
-      vertexShader: SH.SEA_VERT, fragmentShader: SH.SEA_FRAG, uniforms: this.seaU }));
-    sea.rotation.x = -Math.PI / 2; sea.renderOrder = -5; sea.frustumCulled = false;
-    this.sea = sea;
-    scene.add(sea);
+    this.sea = new Sea(scene, U, SH.LIGHT, LOOK);
   }
   update(t, cam) {
     this.sky.position.copy(cam.position);
-    this.sea.position.set(cam.position.x, 0, cam.position.z);
-    this.seaU.uTime.value = t;
+    this.sea.update(t, cam);
   }
 }
 
@@ -125,12 +122,13 @@ export class Spray {
 
 // ------------------------------------------------------------------------------------------------ water rings
 export class Rings {
-  constructor(scene, max = 24) {
+  constructor(scene, max = 48) {
     this.pool = [];
     const g = new THREE.PlaneGeometry(2, 2);
     for (let i = 0; i < max; i++) {
       const m = new THREE.ShaderMaterial({ vertexShader: SH.RING_VERT, fragmentShader: SH.RING_FRAG, transparent: true, depthWrite: false,
         uniforms: { uCol: { value: new THREE.Color(1, 1, 1) }, uA: { value: 0 }, uR: { value: 0.5 }, uW: { value: 0.1 } } });
+      m.depthTest = false;
       const mesh = new THREE.Mesh(g, m);
       mesh.rotation.x = -Math.PI / 2; mesh.visible = false; mesh.renderOrder = -4; mesh.frustumCulled = false;
       scene.add(mesh);
