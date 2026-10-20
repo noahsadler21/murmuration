@@ -10,6 +10,7 @@
 // Birds near the player dodge at a limited speed, so a smooth flyer slips between them and a barging one hits them.
 // A hit bird leaves the formation and tumbles into the sea under simple rigid-body physics.
 import { quatFromFwdRoll } from './birds.js';
+import { newWing, stepWing, bodyAt, WING } from './wings.js';
 
 export function mulberry32(a) {
   return function () {
@@ -39,6 +40,9 @@ export class Path {
     this.tStart = tStart;
     this.k = -1;
     this.baseAlt = alt;
+    // this run's altitude rhythm: two slow swells with random periods and phases
+    const R0 = this.rng;
+    this.alt = { a1: 5 + 4 * R0(), w1: 0.25 + 0.2 * R0(), p1: R0() * 6.283, a2: 2 + 3 * R0(), w2: 0.6 + 0.5 * R0(), p2: R0() * 6.283 };
     this.s = { x: 0, y: alt, z: 0, yaw: this.rng() * Math.PI * 2, pitch: 0, yawRate: 0, target: 0, nextT: tStart, v: 13, lastSign: 1 };
   }
   sweepW(t) {
@@ -47,7 +51,8 @@ export class Path {
     return w;
   }
   altTarget(t) {
-    const b = this.baseAlt + 7 * Math.sin(t * 0.37 + 0.6) + 4 * Math.sin(t * 0.86 + 2.1);
+    const A = this.alt;
+    const b = this.baseAlt + A.a1 * Math.sin(t * A.w1 + A.p1) + A.a2 * Math.sin(t * A.w2 + A.p2);
     return lerp(b, 7.5, this.sweepW(t));
   }
   _step() {
@@ -116,6 +121,11 @@ export class Flock {
     this._S = { d: new Float32Array(14) };
     this._o = { x: 0, y: 0, z: 0, fx: 0, fy: 0, fz: 1, bank: 0, v: 13, wave: 0 };
     this._q = [0, 0, 0, 1];
+    this._b = { heave: 0, surge: 0, pitch: 0 };
+    // this flock's own rhythm of breathing, arching, undulating and twisting
+    const Rp = mulberry32(seed ^ 0x2545f491);
+    this.ph = Array.from({ length: 7 }, () => Rp() * 6.283);
+    this.fq = Array.from({ length: 6 }, () => 0.75 + 0.5 * Rp());
     this._layout(seed);
   }
 
@@ -173,6 +183,10 @@ export class Flock {
       f[o + 2] = 2.2 + 2.4 * R(); f[o + 3] = R() * 6.283; f[o + 4] = 0.35 + 0.4 * R(); f[o + 5] = R() * 6.283;
       this.scale[i] = 0.95 + 0.1 * R();
     }
+    // flight motion: wingbeat bursts, smoothed velocity and the bank it implies
+    this.wR = mulberry32(seed ^ 0x68e31da4);
+    this.wing = Array.from({ length: n }, (_, i) => newWing(this.wR, this.flap[i * 6]));
+    this.vS = new Float32Array(n * 3); this.rollS = new Float32Array(n);
     this.state = new Uint8Array(n);        // 0 in formation, 1 falling, 2 gone
     this.pos = new Float32Array(n * 3); this.prev = new Float32Array(n * 3); this.fwd = new Float32Array(n * 3);
     this.dodge = new Float32Array(n * 3);
@@ -188,15 +202,16 @@ export class Flock {
     const tau = t - L;
     const d = this.path.sample(tau, this._S).d;
     const fold = this.fold;
-    const br = 0.15 * Math.sin(0.29 * tau + 1.1);
+    const ph = this.ph, fq = this.fq;
+    const br = 0.15 * Math.sin(0.29 * fq[0] * tau + ph[0]);
     const a2 = a * (1 - 0.7 * br), r2 = r * (1 + br);
     const rn = r / W;
     const an = a / A;
     // the sheet arches across its width and undulates along its length (an S seen side-on): where it turns edge-on
     // to the eye it reads as a dark band, as in photographs of real murmurations
-    const u2 = u * (1 + 0.22 * Math.sin(0.21 * tau + 0.4)) + fold * Math.sin(0.17 * tau + 2.0) * (rn * rn - 0.33) * W * 0.2
-      + fold * 0.2 * A * Math.sin(2.3 * an + 0.33 * tau + 0.6) * (0.65 + 0.35 * rn);
-    const tw = fold * (0.5 * Math.sin(0.13 * tau + 0.9) * an + 0.3 * Math.sin(0.19 * tau + 2.2) * rn);
+    const u2 = u * (1 + 0.22 * Math.sin(0.21 * fq[1] * tau + ph[1])) + fold * Math.sin(0.17 * fq[2] * tau + ph[2]) * (rn * rn - 0.33) * W * 0.2
+      + fold * 0.2 * A * Math.sin(2.3 * an + 0.33 * fq[3] * tau + ph[3]) * (0.65 + 0.35 * rn);
+    const tw = fold * (0.5 * Math.sin(0.13 * fq[4] * tau + ph[4]) * an + 0.3 * Math.sin(0.19 * fq[5] * tau + ph[5]) * rn);
     const ct = Math.cos(tw), st = Math.sin(tw);
     const r3 = r2 * ct - u2 * st;
     let u3 = r2 * st + u2 * ct;
@@ -221,7 +236,7 @@ export class Flock {
     o.y = d[1] + d[4] * along + d[7] * r3 + d[10] * u3;
     o.z = d[2] + d[5] * along + d[8] * r3 + d[11] * u3;
     o.fx = d[3]; o.fy = d[4]; o.fz = d[5];
-    o.bank = d[12] + wb; o.v = d[13];
+    o.bank = d[12] + wb; o.wb = wb; o.v = d[13];
     return o;
   }
 
@@ -272,7 +287,7 @@ export class Flock {
       const s = state[i];
       if (s === 2) continue;
       const i3 = i * 3;
-      let roll, ph, gw, bw;
+      let roll, ph, gw, bw, pitch = 0;
       if (s === 0) {
         const w = i * 6;
         let ai = a[i] + 0.35 * Math.sin(wob[w] * t + wob[w + 3]);
@@ -305,13 +320,36 @@ export class Flock {
           dodge[i3] = ddx; dodge[i3 + 1] = ddy; dodge[i3 + 2] = ddz;
           x += ddx; y += ddy; z += ddz;
         }
+        // wingbeat bursts; the body rides the bound / glide sink
+        const W = this.wing[i];
+        const climb = o.fy;
+        stepWing(W, dt, climb, this.wR, null);
+        // body root motion over the wingbeat (only while flapping) and the bound / glide sink
+        const flapW = Math.max(0, 1 - W.gw - W.bw);
+        bodyAt(W.p, this._b);
+        y += W.sinkY + this._b.heave * flapW;
+        x += o.fx * this._b.surge * flapW; z += o.fz * this._b.surge * flapW;
+        const vS = this.vS;
+        let bankT = o.bank;
         if (this.inited && dt > 0) {
           const vx = (x - pos[i3]) / dt, vy = (y - pos[i3 + 1]) / dt, vz = (z - pos[i3 + 2]) / dt;
           const vl = Math.sqrt(vx * vx + vy * vy + vz * vz);
           if (vl > 2) {
             fwd[i3] += (vx / vl - fwd[i3]) * sm; fwd[i3 + 1] += (vy / vl - fwd[i3 + 1]) * sm; fwd[i3 + 2] += (vz / vl - fwd[i3 + 2]) * sm;
           }
-        } else { fwd[i3] = o.fx; fwd[i3 + 1] = o.fy; fwd[i3 + 2] = o.fz; }
+          // coordinated-turn bank from the bird's own sideways acceleration (+ = right wing down), plus the wave's roll
+          const ks = 1 - Math.exp(-dt / 0.06);
+          const nx = vS[i3] + (vx - vS[i3]) * ks, ny = vS[i3 + 1] + (vy - vS[i3 + 1]) * ks, nz = vS[i3 + 2] + (vz - vS[i3 + 2]) * ks;
+          const ax = (nx - vS[i3]) / dt, az = (nz - vS[i3 + 2]) / dt;
+          vS[i3] = nx; vS[i3 + 1] = ny; vS[i3 + 2] = nz;
+          let rx = -fwd[i3 + 2], rz = fwd[i3]; const rl = Math.hypot(rx, rz) || 1;
+          const aR = Math.max(-2 * G, Math.min(2 * G, (ax * rx + az * rz) / rl));
+          bankT = Math.atan(aR / G) + o.wb;
+        } else {
+          fwd[i3] = o.fx; fwd[i3 + 1] = o.fy; fwd[i3 + 2] = o.fz;
+          vS[i3] = o.fx * o.v; vS[i3 + 1] = o.fy * o.v; vS[i3 + 2] = o.fz * o.v;
+          this.rollS[i] = o.bank;
+        }
         prev[i3] = pos[i3]; prev[i3 + 1] = pos[i3 + 1]; prev[i3 + 2] = pos[i3 + 2];
         pos[i3] = x; pos[i3 + 1] = y; pos[i3 + 2] = z;
         // contact with the player
@@ -323,13 +361,10 @@ export class Flock {
           cb.onHit(i, x, y, z);
           continue;
         }
-        roll = o.bank + 0.22 * Math.sin(wob[w + 1] * t + wob[w + 4] + 1.57);
-        const f = flap;
-        flap[w + 1] = (f[w + 1] + dt * f[w]) % 1;
-        ph = f[w + 1];
-        gw = smooth(0.35, 0.8, Math.sin(f[w + 2] * t + f[w + 3]));
-        if (o.fy < -0.12) gw = Math.max(gw, smooth(-0.12, -0.3, o.fy));
-        bw = smooth(0.9, 0.99, Math.sin(f[w + 4] * t + f[w + 5])) * (1 - gw);
+        if (dt > 0) this.rollS[i] += (Math.max(-1.2, Math.min(1.2, bankT)) - this.rollS[i]) * (1 - Math.exp(-dt / 0.11));
+        roll = this.rollS[i] + 0.08 * Math.sin(wob[w + 1] * t + wob[w + 4] + 1.57);
+        ph = W.p; gw = W.gw; bw = W.bw;
+        pitch = 0.087 * gw + 0.05 * bw + this._b.pitch * flapW;    // nose up a touch in a glide or bound; wingbeat pitch
       } else {
         // falling: rigid-body tumble under gravity and drag, wings flailing
         const F = this.falling.get(i);
@@ -359,9 +394,11 @@ export class Flock {
       const cd = Math.sqrt(cx * cx + cy * cy + cz * cz);
       this.camDist[i] = cd;
       if (cd < 0.45) continue;
-      quatFromFwdRoll(q, fwd[i3], fwd[i3 + 1], fwd[i3 + 2], roll);
+      let qfx = fwd[i3], qfy = fwd[i3 + 1] + pitch, qfz = fwd[i3 + 2];
+      if (pitch) { const l = Math.hypot(qfx, qfy, qfz); qfx /= l; qfy /= l; qfz /= l; }
+      quatFromFwdRoll(q, qfx, qfy, qfz, roll);
       const L = cd < 7.5 ? lods.near : cd < 80 ? lods.mid : lods.far;
-      L.push(pos[i3], pos[i3 + 1], pos[i3 + 2], scale[i], q, ph, gw, bw);
+      L.push(pos[i3], pos[i3 + 1], pos[i3 + 2], scale[i], q, ph, gw, bw, i % WING.variants);
     }
     lods.near.end(); lods.mid.end(); lods.far.end();
     this.inited = true;

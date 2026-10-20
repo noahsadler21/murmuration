@@ -29,6 +29,8 @@ uniform sampler2D tVatPos, tVatNrm;
 uniform vec3 uVat;               // cycle frames, glide row, bound row
 uniform float uPxPerM, uMinPx, uSpanM, uAlphaPow;
 uniform vec2 uRes; uniform float uDilate;
+uniform float uPhaseOff;
+varying float vBlur;
 attribute float aVid;
 attribute vec4 iPos;             // xyz world position, w scale (0 = hidden)
 attribute vec4 iQuat;            // model → world rotation
@@ -43,8 +45,17 @@ void main() {
   if (iPos.w <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   int vid = int(aVid);
   int nc = int(uVat.x);
-  float ph = fract(iAnim.x) * uVat.x; float r0 = floor(ph); float fr = ph - r0;
-  int i0 = int(r0) % nc, i1 = (i0 + 1) % nc;
+  float phIn = iAnim.x;
+  vBlur = 1.0;
+#ifdef WINGBLUR
+  // a copy of the wings a little earlier or later in the stroke: together they act as a camera shutter
+  float fl = clamp(1.0 - iAnim.y - iAnim.z, 0.0, 1.0);
+  phIn += uPhaseOff * fl;
+  vBlur = fl;
+#endif
+  float ph = fract(phIn) * uVat.x; float r0 = floor(ph); float fr = ph - r0;
+  int vb = int(iAnim.w + 0.5) * nc;          // wingbeat variant: its cycle starts at row variant x cycleFrames
+  int i0 = int(r0) % nc + vb, i1 = (int(r0) + 1) % nc + vb;
   int rg = int(uVat.y), rb = int(uVat.z);
   vec4 a = texelFetch(tVatPos, ivec2(vid, i0), 0), b = texelFetch(tVatPos, ivec2(vid, i1), 0);
   vec3 lp = mix(a.xyz, b.xyz, fr);
@@ -94,6 +105,8 @@ uniform sampler2D tAlbedo, tMask, tNormal;
 uniform vec3 uAlbBody, uAlbWing;
 uniform float uDark;             // exposure of the bird against the bright sky (silhouette look)
 uniform vec3 uGhost; uniform float uGhostA;
+uniform float uBlurA;
+varying float vBlur;
 varying vec3 vWPos;
 varying vec2 vUv;
 varying float vWing;
@@ -141,7 +154,25 @@ void main() {
     col += albedo * 0.35 * uSkyUp * pow(max(n.y, 0.0), 3.0) * mask.r;
   }
 #endif
+#ifdef GLOSS
+  {
+    // overcast sky mirrored in the feather surface: a broad, soft sheen that grows toward grazing angles
+    float nv = clamp(dot(n, V), 0.0, 1.0);
+    float Fr = 0.03 + 0.97 * pow(1.0 - nv, 5.0);
+    col += Fr * 0.16 * hemi(reflect(-V, n)) * mask.r;
+    // flight feathers seen from below glow faintly with the sky behind them
+    col += 0.22 * albedo * uSkyUp * smoothstep(0.4, 0.9, vWing) * max(0.0, -n.y);
+  }
+#endif
   col = haze(col, vWPos);
+#ifdef WINGBLUR
+  {
+    float al = uBlurA * vBlur * smoothstep(0.35, 0.8, vWing);
+    if (al < 0.01) discard;
+    gl_FragColor = vec4(linearToOutputTexel(vec4(col, 1.0)).rgb, al);
+    return;
+  }
+#endif
 #ifdef MINPIXEL
   gl_FragColor = vec4(linearToOutputTexel(vec4(col, 1.0)).rgb * vAlpha, vAlpha);
 #else

@@ -15,6 +15,9 @@ of 4,000 (1,600 on phones), flying over a grey-blue sea under a bright overcast 
 - Two minutes per run, getting harder as it goes (tighter, faster turns, more waves). At the end you get a grade
   (S–D, from in-line % minus collisions), your score and a second-by-second chart of the run.
 
+- Every run is different: the flock's path, its altitude rhythm, its shape and folding, the timing of the sea runs and
+  your place in the flock are all drawn from a fresh seed.
+
 Flights: **Calm** (strong flocking instinct, wide tube), **Flock**, **Storm** (gusts, tight tube, slow neighbours).
 
 ## Controls
@@ -41,7 +44,7 @@ node game/tests/run.js
 loads the page in headless Chrome/Edge and plays scripted runs: a bot that follows the guide (high in-line %), no
 input (poor grade), a bot that rams its neighbours (collisions, falling birds), a fish-diving bot, real keyboard
 events, the countdown and the HUD. Results go to `game/tests/results.json`, screenshots to `captures/`.
-`node game/tests/look.js` saves a look sheet; `node game/tests/shot.js "<query>" out.png "<js>"` one screenshot.
+`node game/tests/look.js` saves a look sheet, `node game/tests/hero.js` a close-up of your bird's wingbeat; `node game/tests/shot.js "<query>" out.png "<js>"` one screenshot.
 
 ## How it works
 
@@ -50,6 +53,12 @@ events, the countdown and the HUD. Results go to `game/tests/results.json`, scre
   so a turn sweeps through the flock as a fold; the sheet also breathes, arches, undulates and twists, and agitation
   waves run across it. All of it is an analytic function of time, so the slot's future (the guide) is exact and the
   CPU knows every bird for collisions. Birds near you dodge at a limited speed; a hit bird becomes a rigid body.
+- `wings.js`: each bird flies in flap / glide / bound bursts (Tobalske 1995), switching pose only at the point of the
+  wingbeat that already matches the glide or bound pose (measured from the baked cycle at load, so rebaked assets keep
+  working), sinking a little in bounds and glides. Birds bank from their own sideways acceleration and lift the nose
+  in a glide. Your bird keeps beating under boost and folds its wings in a steep dive.
+- Wing blur: extra wing-only draws a fraction of a wingbeat earlier and later act as a camera shutter (six samples on
+  your bird, two on near birds), so the 13.3 Hz wingbeat reads as fluid instead of strobing at 60 fps.
 - `birds.js` / `shaders.js`: the project's `murm-vat-1` starlings from `../assets/birds/` as instanced
   vertex-animation meshes (real scan close up for your bird, retro / silhouette / micro LODs for the flock, with the
   main page's min-pixel widening and screen-space dilation for far birds).
@@ -58,3 +67,6 @@ events, the countdown and the HUD. Results go to `game/tests/results.json`, scre
 
 Credits: starling scan by Virtual Museums of Małopolska / Tomek Natural Science Museum (MP 314), CC0. three.js (MIT),
 0.170.0 from jsDelivr.
+
+`node game/tools/snapshot.js [out.html]` freezes the current game, assets included, into one self-contained HTML file
+(`game/snapshots/` is not committed).

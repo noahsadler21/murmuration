@@ -75,6 +75,15 @@ const check = (name, ok, info) => { checks.push({ name, ok: !!ok, info }); conso
     out.fps = (await s.evalp('JSON.stringify(game.stats())'));
     console.log('fps sample', out.fps);
 
+    // asset contract read defensively: a future rebake with variants and fewer keys still yields a usable layout
+    const nm = JSON.parse(await s.evalp(`import('/game/birds.js').then((m) => JSON.stringify([
+      m.normalizeMeta({ verts: 46, variants: 4, rows: 130, buffers: { index: {}, uv: { count: 92 }, vatPos: { count: 46 * 130 * 4 }, vatNrm: {} } }, 'v'),
+      m.normalizeMeta({ buffers: { index: {}, uv: { count: 92 }, vatPos: { count: 46 * 34 * 4 }, vatNrm: {} } }, 'bare'),
+      m.bodyCurve({ cycleFrames: 2, body: { heave_m: [0.001, -0.001], pitch_deg: [1, -1] } })]))`));
+    check('asset contract: variants layout', nm[0].cycleFrames === 32 && nm[0].rowGlide === 128 && nm[0].rowBound === 129, { cycleFrames: nm[0].cycleFrames, rowGlide: nm[0].rowGlide });
+    check('asset contract: bare meta falls back', nm[1].verts === 46 && nm[1].rows === 34 && nm[1].cycleFrames === 32 && nm[1].rowBound === 33, { rows: nm[1].rows, cycleFrames: nm[1].cycleFrames });
+    check('asset contract: body curve read', nm[2] && nm[2].heave.length === 2 && Math.abs(nm[2].pitch[0] - Math.PI / 180) < 1e-9 && nm[2].surge[0] === 0, nm[2]);
+
     const er = s.errors();
     check('console is clean', er.length === 0, er.slice(0, 5));
   } finally { await s.close(); }

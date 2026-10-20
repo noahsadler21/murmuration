@@ -1,5 +1,5 @@
 {
- "when": "2026-10-20T21:58:51.048Z",
+ "when": "2026-10-20T22:56:59.465Z",
  "checks": [
   {
    "name": "title screen shows",
@@ -10,40 +10,40 @@
    "name": "lane bot finishes the run",
    "ok": true,
    "info": {
-    "grade": "A",
-    "pct": 97.56595461601192,
-    "collisions": 2,
-    "dunks": 1,
-    "fish": 1,
-    "score": 2707
+    "grade": "S",
+    "pct": 99.29546489661838,
+    "collisions": 0,
+    "dunks": 0,
+    "fish": 0,
+    "score": 2979
    }
   },
   {
    "name": "lane bot is in line > 85 %",
    "ok": true,
    "info": {
-    "pathPct": 97.57
+    "pathPct": 99.3
    }
   },
   {
    "name": "lane bot has ≤ 2 collisions",
    "ok": true,
    "info": {
-    "collisions": 2
+    "collisions": 0
    }
   },
   {
    "name": "results screen shows a grade",
    "ok": true,
    "info": {
-    "grade": "A"
+    "grade": "S"
    }
   },
   {
    "name": "idle player grades poorly (< 70 %)",
    "ok": true,
    "info": {
-    "pathPct": 1.76,
+    "pathPct": 8.5,
     "grade": "D"
    }
   },
@@ -51,7 +51,7 @@
    "name": "ram bot collides",
    "ok": true,
    "info": {
-    "collisions": 5
+    "collisions": 3
    }
   },
   {
@@ -59,7 +59,7 @@
    "ok": true,
    "info": {
     "falling": 1,
-    "lost": 4
+    "lost": 2
    }
   },
   {
@@ -73,7 +73,7 @@
    "name": "falling birds reach the sea and leave the flock",
    "ok": true,
    "info": {
-    "lost": 5,
+    "lost": 3,
     "falling": 0
    }
   },
@@ -81,24 +81,24 @@
    "name": "fish bot catches flying fish",
    "ok": true,
    "info": {
-    "fish": 17,
-    "spawned": 43
+    "fish": 16,
+    "spawned": 45
    }
   },
   {
    "name": "chasing fish costs in-line %",
    "ok": true,
    "info": {
-    "fishBot": 24.89,
-    "laneBot": 97.57
+    "fishBot": 26.83,
+    "laneBot": 99.3
    }
   },
   {
    "name": "ArrowRight turns the bird right (yaw decreases)",
    "ok": true,
    "info": {
-    "yaw0": 1.420521115285775,
-    "yaw1": 0.03735681295404739
+    "yaw0": 2.8394587765245127,
+    "yaw1": 1.4679737683986258
    }
   },
   {
@@ -119,6 +119,40 @@
    }
   },
   {
+   "name": "asset contract: variants layout",
+   "ok": true,
+   "info": {
+    "cycleFrames": 32,
+    "rowGlide": 128
+   }
+  },
+  {
+   "name": "asset contract: bare meta falls back",
+   "ok": true,
+   "info": {
+    "rows": 34,
+    "cycleFrames": 32
+   }
+  },
+  {
+   "name": "asset contract: body curve read",
+   "ok": true,
+   "info": {
+    "heave": [
+     0.001,
+     -0.001
+    ],
+    "surge": [
+     0,
+     0
+    ],
+    "pitch": [
+     0.017453292519943295,
+     -0.017453292519943295
+    ]
+   }
+  },
+  {
    "name": "console is clean",
    "ok": true,
    "info": []
@@ -127,45 +161,45 @@
  "runs": {
   "lane": {
    "mode": "end",
-   "t": 120.01,
+   "t": 120.02,
    "diff": "flock",
-   "pathPct": 97.57,
-   "q": 0.484,
-   "dist": 2.71,
-   "collisions": 2,
-   "dunks": 1,
-   "fish": 1,
-   "fishSpawned": 42,
-   "fishMissed": 40,
-   "score": 2707,
+   "pathPct": 99.3,
+   "q": 1,
+   "dist": 0.73,
+   "collisions": 0,
+   "dunks": 0,
+   "fish": 0,
+   "fishSpawned": 52,
+   "fishMissed": 51,
+   "score": 2979,
    "birds": 4000,
    "falling": 0,
-   "lost": 2,
+   "lost": 0,
    "fps": 60,
    "result": {
-    "grade": "A",
-    "pct": 97.56595461601192,
-    "collisions": 2,
-    "dunks": 1,
-    "fish": 1,
-    "score": 2707
+    "grade": "S",
+    "pct": 99.29546489661838,
+    "collisions": 0,
+    "dunks": 0,
+    "fish": 0,
+    "score": 2979
    },
    "draw": {
-    "near": 367,
-    "mid": 3631,
+    "near": 598,
+    "mid": 3402,
     "far": 0
    },
    "calls": 8,
-   "tris": 367686
+   "tris": 956594
   },
   "idle": {
    "mode": "end",
    "t": 120.01,
    "diff": "flock",
-   "pathPct": 1.76,
+   "pathPct": 8.5,
    "q": 0,
-   "dist": 20.86,
-   "collisions": 9,
+   "dist": 15.41,
+   "collisions": 6,
    "dunks": 0,
    "fish": 0,
    "fishSpawned": 45,
@@ -173,32 +207,32 @@
    "score": 0,
    "birds": 4000,
    "falling": 1,
-   "lost": 8,
-   "fps": 58,
+   "lost": 5,
+   "fps": 60,
    "result": {
     "grade": "D",
-    "pct": 1.7648709925045671,
-    "collisions": 9,
+    "pct": 8.500056311534069,
+    "collisions": 6,
     "dunks": 0,
     "fish": 0,
     "score": 0
    },
    "draw": {
-    "near": 1,
-    "mid": 3991,
+    "near": 108,
+    "mid": 3887,
     "far": 0
    },
-   "calls": 9,
-   "tris": 235182
+   "calls": 10,
+   "tris": 364662
   },
   "ram": {
    "mode": "play",
-   "t": 13.34,
+   "t": 13.6,
    "diff": "flock",
-   "pathPct": 9.39,
+   "pathPct": 31.39,
    "q": 0,
-   "dist": 12.14,
-   "collisions": 5,
+   "dist": 9.24,
+   "collisions": 3,
    "dunks": 0,
    "fish": 0,
    "fishSpawned": 2,
@@ -206,57 +240,57 @@
    "score": 0,
    "birds": 4000,
    "falling": 1,
-   "lost": 4,
-   "fps": 58,
+   "lost": 2,
+   "fps": 60,
    "result": {
     "grade": "D",
-    "pct": 1.7648709925045671,
-    "collisions": 9,
+    "pct": 8.500056311534069,
+    "collisions": 6,
     "dunks": 0,
     "fish": 0,
     "score": 0
    },
    "draw": {
-    "near": 48,
-    "mid": 3948,
+    "near": 301,
+    "mid": 3697,
     "far": 0
    },
-   "calls": 15,
-   "tris": 256004
+   "calls": 25,
+   "tris": 613072
   },
   "fish": {
    "mode": "end",
    "t": 120.01,
    "diff": "flock",
-   "pathPct": 24.89,
+   "pathPct": 26.83,
    "q": 0,
-   "dist": 4.47,
-   "collisions": 7,
-   "dunks": 7,
-   "fish": 17,
-   "fishSpawned": 43,
-   "fishMissed": 25,
-   "score": 2247,
+   "dist": 11.23,
+   "collisions": 9,
+   "dunks": 4,
+   "fish": 16,
+   "fishSpawned": 45,
+   "fishMissed": 29,
+   "score": 2205,
    "birds": 4000,
    "falling": 0,
-   "lost": 7,
-   "fps": 57,
+   "lost": 9,
+   "fps": 58,
    "result": {
     "grade": "D",
-    "pct": 24.892952280139767,
-    "collisions": 7,
-    "dunks": 7,
-    "fish": 17,
-    "score": 2247
+    "pct": 26.826518842408948,
+    "collisions": 9,
+    "dunks": 4,
+    "fish": 16,
+    "score": 2205
    },
    "draw": {
-    "near": 357,
-    "mid": 3636,
+    "near": 0,
+    "mid": 3991,
     "far": 0
    },
-   "calls": 9,
-   "tris": 364032
+   "calls": 6,
+   "tris": 234060
   },
-  "fps": "{\"mode\":\"play\",\"t\":3.65,\"diff\":\"calm\",\"pathPct\":99.87,\"q\":1,\"dist\":0.4,\"collisions\":0,\"dunks\":0,\"fish\":0,\"fishSpawned\":0,\"fishMissed\":0,\"score\":91,\"birds\":4000,\"falling\":0,\"lost\":0,\"fps\":60,\"result\":{\"grade\":\"D\",\"pct\":24.892952280139767,\"collisions\":7,\"dunks\":7,\"fish\":17,\"score\":2247},\"draw\":{\"near\":292,\"mid\":3708,\"far\":0},\"calls\":12,\"tris\":342322}"
+  "fps": "{\"mode\":\"play\",\"t\":3.68,\"diff\":\"calm\",\"pathPct\":100,\"q\":1,\"dist\":0.61,\"collisions\":0,\"dunks\":0,\"fish\":0,\"fishSpawned\":0,\"fishMissed\":0,\"score\":92,\"birds\":4000,\"falling\":0,\"lost\":0,\"fps\":60,\"result\":{\"grade\":\"D\",\"pct\":26.826518842408948,\"collisions\":9,\"dunks\":4,\"fish\":16,\"score\":2205},\"draw\":{\"near\":487,\"mid\":3513,\"far\":0},\"calls\":20,\"tris\":835226}"
  }
 }

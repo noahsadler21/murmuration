@@ -1,9 +1,10 @@
 // main.js: One Bird, a starling-murmuration game. You are one bird in the flock: hold your place, don't hit your
 // neighbours, snatch flying fish when the flock skims the sea.
 import * as THREE from 'three';
-import { loadStarlings, VatLOD, quatFromFwdRoll } from './birds.js';
+import { loadStarlings, VatLOD, quatFromFwdRoll, bodyCurve } from './birds.js';
 import { Path, Flock, mulberry32 } from './flock.js';
 import { Input, Player } from './player.js';
+import { WING, matchPhases, bodyAt } from './wings.js';
 import { World, Spray, Rings, Feathers, makeEnv, sharedUniforms, LOOK } from './fx.js';
 import { FishSchool } from './fish.js';
 import { Sound } from './audio.js';
@@ -26,8 +27,17 @@ const DIFF = {
   storm: { label: 'Storm', assist: 0.22, pace: 0.45, ramp: 1.22, tol: 0.85, gust: 2.0, dodge: 1.5, catchR: 0.85, hitR: 0.32, crossers: 1.4, waves: 1.3 },
 };
 const RUN_T = +(QS.get('runT') || 120);
-const SWEEPS = [[21, 29], [50, 58], [78, 86], [103, 111]].map(([a, b]) => ({ t0: a * RUN_T / 120, t1: b * RUN_T / 120 }));
-const SLOT = { a: -3, r: 2.5, u: 0.4 };
+// sea runs: four per run, at times and lengths drawn per run around these anchors (seconds of a 120 s run)
+function makeSweeps(R) {
+  return [21, 50, 78, 103].map((a) => {
+    const t0 = (a + (R() - 0.5) * 8) * RUN_T / 120;
+    return { t0, t1: t0 + (6.5 + 3.5 * R()) * RUN_T / 120 };
+  });
+}
+let SWEEPS = makeSweeps(Math.random);
+// your place in the flock, drawn per run (flock frame: along, lateral, vertical; m)
+function makeSlot(R) { return { a: -6 + 10 * R(), r: (R() < 0.5 ? -1 : 1) * (1 + 6 * R()), u: (R() - 0.5) * 1.4 }; }
+let SLOT = { a: -3, r: 2.5, u: 0.4 };
 
 const coarse = matchMedia('(pointer: coarse)').matches;
 const small = Math.min(screen.width, screen.height) < 600;
@@ -112,6 +122,7 @@ const tmpS = { x: 0, y: 0, z: 0, fx: 0, fy: 0, fz: 1, bank: 0, v: 13 };
 const tmpA = { ...tmpS }, tmpB = { ...tmpS };
 const camState = { pos: new THREE.Vector3(0, 30, -20), look: new THREE.Vector3(0, 30, 0), fwd: new THREE.Vector3(0, 0, 1), up: new THREE.Vector3(0, 1, 0), init: false };
 const qtmp = [0, 0, 0, 1];
+const heroBody = { heave: 0, surge: 0, pitch: 0 };
 
 function profileFor(run) {
   const D = DIFF[G.diffKey];
@@ -125,10 +136,13 @@ function profileFor(run) {
 
 function newWorld(run, seed) {
   G.seed = seed;
+  const Rw = mulberry32(seed ^ 0x9e3779b9);
+  if (run) { SWEEPS = makeSweeps(Rw); SLOT = makeSlot(Rw); }
   const sweeps = run ? SWEEPS : [{ t0: 24, t1: 32 }, { t0: 74, t1: 82 }, { t0: 124, t1: 132 }];
-  G.path = new Path(seed, { profile: profileFor(run), sweeps, tStart: -8, alt: 32 });
+  G.path = new Path(seed, { profile: profileFor(run), sweeps, tStart: -8, alt: 27 + 10 * Rw() });
   const D = DIFF[G.diffKey];
-  G.flock = new Flock({ N: N_BIRDS, seed, path: G.path, slot: SLOT });
+  const dims = { A: 16 + 6 * Rw(), W: 21 + 8 * Rw(), H: 2.6 + 0.8 * Rw() };
+  G.flock = new Flock({ N: N_BIRDS, seed, path: G.path, slot: SLOT, dims });
   G.flock.dodgeSpeed = D.dodge; G.flock.hitR = D.hitR;
   G.R = mulberry32(seed * 7 + 3);
   G.path.ensure(10);
@@ -145,11 +159,19 @@ async function boot() {
     mid: new VatLOD(assets.sil, { max: N_BIRDS, defines: { DILATE: 1 }, shared, dark: 0.42 }),
     far: new VatLOD(assets.micro, { max: N_BIRDS, defines: { MINPIXEL: 1, DILATE: 1 }, shared, dark: 0.42, premult: true, renderOrder: 3 }),
   };
-  hero = new VatLOD(assets.real, { max: 1, defines: { TEXTURED: 1, NORMALMAP: 1, SMOOTH_NRM: 1, IRID: 1 }, shared, dark: 0.85 });
+  // where in the baked wingbeat the wings already look like the glide and the bound pose
+  Object.assign(WING, matchPhases(assets.sil));
+  // wingbeat variants only as many as every LOD carries; body motion from the asset when it ships one
+  WING.variants = Math.min(...Object.values(assets).map((a) => a.meta.variants));
+  WING.body = bodyCurve(assets.retro.meta);
+  hero = new VatLOD(assets.real, { max: 1, defines: { TEXTURED: 1, NORMALMAP: 1, SMOOTH_NRM: 1, IRID: 1, GLOSS: 1 }, shared, dark: 0.85 });
+  // shutter: about a 180° shutter at 60 fps is 1/120 s, a ninth of a 13.3 Hz wingbeat; six samples across it
+  hero.addBlur(scene, [-0.055, -0.035, -0.015, 0.015, 0.035, 0.055], 0.2);
+  lods.near.addBlur(scene, [-0.045, 0.045], 0.32);
   ghost = new VatLOD(assets.real, { max: 1, defines: { GHOST: 1, SMOOTH_NRM: 1 }, shared, transparent: true, renderOrder: 9 });
   ghost.uniforms.uGhost.value.copy(LOOK.accent);
   for (const L of [lods.near, lods.mid, lods.far, hero, ghost]) scene.add(L.mesh);
-  newWorld(false, 11);
+  newWorld(false, (Math.random() * 1e9) | 0);
   G.t = 0;
   // warm the shaders up so the first frame of play doesn't hitch
   setMode('title');
@@ -293,8 +315,12 @@ function botInput() {
       }
       G.botTarget = bi; G.botUntil = t + 2.5;
     }
-    if (bi >= 0) { tx = F.pos[bi * 3]; ty = F.pos[bi * 3 + 1]; tz = F.pos[bi * 3 + 2]; }
-    else mode = 'lane';
+    if (bi >= 0) {
+      // intercept: aim where the bird will be, using its velocity relative to ours
+      const b3 = bi * 3, d = Math.hypot(F.pos[b3] - P.x, F.pos[b3 + 1] - P.y, F.pos[b3 + 2] - P.z), lead = Math.min(0.6, d / 6);
+      tx = F.pos[b3] + (F.vS[b3] - P.vx) * lead; ty = F.pos[b3 + 1] + (F.vS[b3 + 1] - P.vy) * lead; tz = F.pos[b3 + 2] + (F.vS[b3 + 2] - P.vz) * lead;
+      G.botClose = d < 4;
+    } else mode = 'lane';
   }
   let along = 0;
   if (mode === 'lane') {
@@ -308,7 +334,7 @@ function botInput() {
   const A = DIFF[G.diffKey].assist;
   const sx = clamp(-wrapPi(yawT - P.yaw) * 2.4 - P.yawRate * 0.08, -1, 1);
   const sy = clamp((pitchT - P.pitch * (1 - A)) * 2.0, -1, 1);
-  return { sx, sy, boost: mode !== 'lane' ? true : along < -1.5, brake: mode === 'lane' && along > 1.5 };
+  return { sx, sy, boost: mode === 'fish' || (mode === 'ram' && !G.botClose) ? true : mode === 'lane' && along < -1.5, brake: mode === 'lane' && along > 1.5 };
 }
 
 // ------------------------------------------------------------------------------------------------ frame update
@@ -335,7 +361,7 @@ function frame(dtReal) {
       G.nextWave = t + (G.mode === 'title' ? 5 : lerp(9, 3.2, p) / D.waves) * (0.75 + 0.5 * G.R());
     }
     if (playing && t >= G.nextCross) {
-      const i = F.addCrosser(t, G.R, SLOT);
+      const i = F.addCrosser(t, G.R, F.slot);
       if (i >= 0 && !G.phaseShown.cross) { G.phaseShown.cross = 1; toast('Watch out: neighbours drifting through your lane', 'info', 2.6); }
       G.nextCross = t + lerp(8, 3, p) / D.crossers * (0.7 + 0.6 * G.R());
     }
@@ -390,8 +416,13 @@ function frame(dtReal) {
   // the player's bird, the ghost and the guide
   hero.begin(); ghost.begin();
   if (G.mode !== 'title' && G.mode !== 'end') {
-    quatFromFwdRoll(qtmp, P.fx, P.fy, P.fz, P.roll);
-    hero.push(P.x, P.y, P.z, 1, qtmp, P.phase, P.glide, P.bound);
+    // nose up a touch in a glide, body riding the bound's sink (visual only; the flight model is unchanged)
+    const fl = Math.max(0, 1 - P.glide - P.bound);
+    const bd = bodyAt(P.phase, heroBody);
+    const pu = 0.087 * P.glide + 0.05 * P.bound + bd.pitch * fl;
+    const hl = Math.hypot(P.fx, P.fy + pu, P.fz);
+    quatFromFwdRoll(qtmp, P.fx / hl, (P.fy + pu) / hl, P.fz / hl, P.roll);
+    hero.push(P.x + P.fx * bd.surge * fl, P.y + P.sinkY + bd.heave * fl, P.z + P.fz * bd.surge * fl, 1, qtmp, P.phase, P.glide, P.bound);
     const off = G.mode === 'play' && G.dist !== undefined ? G.dist : 0;
     const camD = camera.position.distanceTo(_v.set(tmpS.x, tmpS.y, tmpS.z));
     const ga = G.mode === 'play' ? smooth(0.9, 2.2, off) * smooth(1.2, 2.6, camD) * 0.6 : 0;
@@ -729,9 +760,9 @@ $('bestLine').textContent = bestText();
 $('birdCount').textContent = N_BIRDS.toLocaleString();
 $('fly').addEventListener('click', () => startRun());
 $('again').addEventListener('click', () => startRun());
-$('menu').addEventListener('click', () => { newWorld(false, 11); G.t = 0; camState.init = false; G.nextWave = 0; G.nextFish = 0; setMode('title'); });
+$('menu').addEventListener('click', () => { newWorld(false, (Math.random() * 1e9) | 0); G.t = 0; camState.init = false; G.nextWave = 0; G.nextFish = 0; setMode('title'); });
 $('resume').addEventListener('click', () => pauseToggle(false));
-$('quit').addEventListener('click', () => { newWorld(false, 11); G.t = 0; camState.init = false; G.nextWave = 0; G.nextFish = 0; setMode('title'); });
+$('quit').addEventListener('click', () => { newWorld(false, (Math.random() * 1e9) | 0); G.t = 0; camState.init = false; G.nextWave = 0; G.nextFish = 0; setMode('title'); });
 const optInv = $('optInvert'), optMouse = $('optMouse');
 optInv.checked = input.invertY; optMouse.checked = input.mouseSteer;
 optInv.addEventListener('change', () => { input.invertY = optInv.checked; store.set('invertY', optInv.checked); });
@@ -752,7 +783,7 @@ $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) pause
 
 // ------------------------------------------------------------------------------------------------ test / debug API
 window.game = {
-  G, DIFF, SLOT, RUN_T, fishes, input, camera, scene, renderer, get lods() { return lods; }, get hero() { return hero; }, get ghost() { return ghost; },
+  G, DIFF, get SLOT() { return SLOT; }, get SWEEPS() { return SWEEPS; }, RUN_T, fishes, input, camera, scene, renderer, get lods() { return lods; }, get hero() { return hero; }, get ghost() { return ghost; },
   start: (o) => startRun(o),
   bot: (m) => { G.bot = m || null; if (!m) input.override = null; },
   // advance the simulation in fixed steps without waiting for frames (headless tests)

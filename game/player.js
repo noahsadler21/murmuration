@@ -1,4 +1,5 @@
 // player.js: input (mouse stick, touch drag, keyboard) and the player's starling flight model.
+import { newWing, stepWing } from './wings.js';
 const G = 9.81;
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const wrapPi = (a) => { a = (a + Math.PI) % (2 * Math.PI); if (a < 0) a += 2 * Math.PI; return a - Math.PI; };
@@ -89,7 +90,8 @@ export class Player {
     this.vx = 0; this.vy = 0; this.vz = 0;
     this.energy = 1; this.boosting = 0; this.braking = 0;
     this.invuln = 0; this.stun = 0; this.kick = 0;
-    this.phase = 0; this.glide = 0; this.bound = 0; this.flapRate = 13.3;
+    this.phase = 0; this.glide = 0; this.bound = 0; this.flapRate = 13.3; this.sinkY = 0;
+    let sd = 12345; this.wing = newWing(() => ((sd = (sd * 16807) % 2147483647) / 2147483647), 13.3);
     this.gust = { x: 0, z: 0, tx: 0, tz: 0, t: 0 };
     this.dunks = 0;
     this._dir();
@@ -145,15 +147,14 @@ export class Player {
     // visual roll: a coordinated turn (bank = atan(v·ω/g)), right turn = right wing down = + roll
     const rollT = clamp(-Math.atan(this.speed * this.yawRate / G), -1.25, 1.25);
     this.roll += (rollT - this.roll) * (1 - Math.exp(-dt / 0.12));
-    // wings: hard flapping when climbing or boosting, a glide when easing down, folded in a steep dive
-    const climb = this.pitch;
-    this.phaseT = (this.phaseT || 0) + dt;
-    const gT = this.boosting > 0.5 ? 0 : smooth(-0.08, -0.3, climb) * (1 - smooth(-0.55, -0.75, climb)) + 0.35 * smooth(0.6, 0.9, Math.sin(this.phaseT * 2.7));
-    this.glide += (clamp(gT, 0, 1) - this.glide) * (1 - Math.exp(-dt / 0.15));
-    const bT = smooth(-0.5, -0.75, climb);
-    this.bound += (bT - this.bound) * (1 - Math.exp(-dt / 0.15));
-    this.flapRate = 13.3 * (1 + 0.12 * this.boosting + 0.1 * Math.max(0, climb));
-    this.phase = (this.phase + dt * this.flapRate) % 1;
+    // wings: the same flap / glide / bound bursts as the flock; boost keeps the wings beating, a steep dive folds
+    // them into a stoop, and a hard turn or climb means more beats between rests
+    const climb = Math.sin(this.pitch) + Math.min(0.3, Math.abs(this.yawRate) * 0.12);
+    const force = this.boosting > 0.5 || this.stun > 0 ? 'flap' : this.pitch < -0.55 ? 'tuck' : null;
+    const W = this.wing;
+    W.rate = 13.3 * (1 + 0.1 * this.boosting);
+    stepWing(W, dt, climb, R, force);
+    this.phase = W.p; this.glide = W.gw; this.bound = W.bw; this.sinkY = W.sinkY;
   }
   hit(R) {
     this.speed *= 0.72;

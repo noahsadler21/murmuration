@@ -6,9 +6,28 @@ import { BIRD_VERT, BIRD_FRAG } from './shaders.js';
 
 export const LOD_NAMES = ['real', 'retro', 'sil', 'micro'];
 
+// Read the asset contract defensively: a rebake may add keys (variants, body motion) or drop optional ones, and the game
+// must keep flying. Required: verts (or uv), buffers.{index,uv,vatPos,vatNrm}. Everything else has a fallback.
+export function normalizeMeta(meta, name) {
+  const B = meta.buffers || {};
+  for (const k of ['index', 'uv', 'vatPos', 'vatNrm']) if (!B[k]) throw new Error(`${name}: buffers.${k} missing`);
+  const verts = meta.verts || B.uv.count / 2;
+  const rows = meta.rows || Math.floor(B.vatPos.count / (verts * 4));
+  if (rows * verts * 4 > B.vatPos.count) throw new Error(`${name}: vatPos holds fewer than ${rows} rows`);
+  const variants = Math.max(1, (meta.variants | 0) || 1);
+  const cycleFrames = meta.cycleFrames || Math.floor((rows - 2) / variants);
+  return {
+    ...meta, verts, rows, variants, cycleFrames,
+    rowGlide: meta.rowGlide ?? rows - 2, rowBound: meta.rowBound ?? rows - 1,
+    spanM: meta.spanM || 0.39,
+    albedoLinear: { body: [0.12, 0.095, 0.078], wing: [0.12, 0.09, 0.072], ...(meta.albedoLinear || {}) },
+  };
+}
+
 export async function loadVat(base, name, texLoader) {
-  const meta = await (await fetch(base + name + '.json')).json();
-  if (meta.format !== 'murm-vat-1') throw new Error(`${name}: format ${meta.format}`);
+  const raw = await (await fetch(base + name + '.json')).json();
+  if (raw.format && raw.format !== 'murm-vat-1') console.warn(`${name}: format ${raw.format}, reading it as murm-vat-1`);
+  const meta = normalizeMeta(raw, name);
   const buf = await (await fetch(base + name + '.bin')).arrayBuffer();
   const B = meta.buffers;
   const out = {
@@ -24,7 +43,7 @@ export async function loadVat(base, name, texLoader) {
     if (!file || !texLoader) return res(null);
     texLoader.load(base + file, (t) => {
       t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-      t.anisotropy = 4;
+      t.anisotropy = 16;
       res(t);
     }, undefined, () => res(null));
   });
@@ -32,19 +51,39 @@ export async function loadVat(base, name, texLoader) {
   return out;
 }
 
+// all four LODs; one that fails to load is replaced by the nearest one that did
 export async function loadStarlings(base, onProgress) {
   const texLoader = new THREE.TextureLoader();
-  const out = {};
+  const got = {};
   let done = 0;
   await Promise.all(LOD_NAMES.map(async (l) => {
-    out[l] = await loadVat(base, 'starling_' + l, l === 'real' || l === 'retro' ? texLoader : null);
+    try { got[l] = await loadVat(base, 'starling_' + l, l === 'real' || l === 'retro' ? texLoader : null); }
+    catch (e) { console.warn('starling_' + l + ' did not load:', e.message); }
     done++; if (onProgress) onProgress(done / LOD_NAMES.length);
   }));
+  const order = { real: ['retro', 'sil', 'micro'], retro: ['real', 'sil', 'micro'], sil: ['retro', 'micro', 'real'], micro: ['sil', 'retro', 'real'] };
+  const out = {};
+  for (const l of LOD_NAMES) {
+    out[l] = got[l] || order[l].map((k) => got[k]).find(Boolean);
+    if (!out[l]) throw new Error('no starling asset could be loaded from ' + base);
+  }
   return out;
 }
 
+// body root motion over the wingbeat, if the asset ships it (meta.body: heave_m / surge_m / pitch_deg, one value per
+// cycle row); otherwise null and the game uses its own small heave and pitch (wings.js bodyAt)
+export function bodyCurve(meta) {
+  const b = meta.body, n = meta.cycleFrames;
+  if (!b) return null;
+  const arr = (k) => (Array.isArray(b[k]) && b[k].length >= n ? b[k].slice(0, n).map(Number) : null);
+  const heave = arr('heave_m'), surge = arr('surge_m'), pitch = arr('pitch_deg');
+  if (!heave && !surge && !pitch) return null;
+  const z = new Array(n).fill(0);
+  return { heave: heave || z, surge: surge || z, pitch: (pitch || z).map((d) => d * Math.PI / 180) };
+}
+
 function vatTextures(A) {
-  const v = A.meta.verts, rows = A.meta.rows || 34;
+  const v = A.meta.verts, rows = A.meta.rows;
   const vp = new THREE.DataTexture(A.vatPos, v, rows, THREE.RGBAFormat, THREE.HalfFloatType);
   const vn = new THREE.DataTexture(A.vatNrm, v, rows, THREE.RGBAFormat, THREE.UnsignedByteType);
   for (const t of [vp, vn]) { t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; }
@@ -77,12 +116,14 @@ export class VatLOD {
     this.uniforms = {
       ...shared,
       tVatPos: { value: A._tex.vp }, tVatNrm: { value: A._tex.vn },
-      uVat: { value: new THREE.Vector3(M.cycleFrames || 32, M.rowGlide ?? 32, M.rowBound ?? 33) },
+      uVat: { value: new THREE.Vector3(M.cycleFrames, M.rowGlide, M.rowBound) },
       tAlbedo: { value: A.albedo }, tMask: { value: A.mask }, tNormal: { value: A.normal },
       uAlbBody: { value: new THREE.Vector3(...M.albedoLinear.body) }, uAlbWing: { value: new THREE.Vector3(...M.albedoLinear.wing) },
       uDark: { value: dark },
       uGhost: { value: new THREE.Color(1, 0.5, 0.2) }, uGhostA: { value: 0 },
+      uPhaseOff: { value: 0 }, uBlurA: { value: 0 },
     };
+    this.defines = d;
     const mat = new THREE.ShaderMaterial({ vertexShader: BIRD_VERT, fragmentShader: BIRD_FRAG, uniforms: this.uniforms, defines: d,
       side: THREE.DoubleSide, transparent: transparent || premult, depthWrite: !transparent });
     if (premult) {
@@ -96,14 +137,27 @@ export class VatLOD {
     this.mesh.renderOrder = renderOrder;
     this.n = 0;
   }
+  // wing-only copies of this draw at phase offsets (fractions of a wingbeat), blended over it: a motion-blur shutter
+  addBlur(scene, offsets, alpha) {
+    this.blur = offsets.map((off, k) => {
+      const m = new THREE.ShaderMaterial({ vertexShader: this.mat.vertexShader, fragmentShader: this.mat.fragmentShader,
+        uniforms: { ...this.uniforms, uPhaseOff: { value: off }, uBlurA: { value: alpha } }, defines: { ...this.defines, WINGBLUR: 1 },
+        side: THREE.DoubleSide, transparent: true, depthWrite: false });
+      const mesh = new THREE.Mesh(this.geo, m);
+      mesh.frustumCulled = false; mesh.renderOrder = this.mesh.renderOrder + 1 + k;
+      scene.add(mesh);
+      return mesh;
+    });
+    return this;
+  }
   begin() { this.n = 0; }
-  push(px, py, pz, s, q, ph, gw, bw) {
+  push(px, py, pz, s, q, ph, gw, bw, variant = 0) {
     if (this.n >= this.max) return;
     const o = this.n * 4;
     const P = this.pos, Q = this.quat, A = this.anim;
     P[o] = px; P[o + 1] = py; P[o + 2] = pz; P[o + 3] = s;
     Q[o] = q[0]; Q[o + 1] = q[1]; Q[o + 2] = q[2]; Q[o + 3] = q[3];
-    A[o] = ph; A[o + 1] = gw; A[o + 2] = bw; A[o + 3] = 0;
+    A[o] = ph; A[o + 1] = gw; A[o + 2] = bw; A[o + 3] = variant;
     this.n++;
   }
   end() {
@@ -114,6 +168,7 @@ export class VatLOD {
     }
     this.geo.instanceCount = n;
     this.mesh.visible = n > 0;
+    if (this.blur) for (const b of this.blur) b.visible = n > 0;
   }
 }
 
