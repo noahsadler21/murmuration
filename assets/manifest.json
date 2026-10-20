@@ -1,5 +1,5 @@
 {
- "build": "20261020T055818Z-6af2b633",
+ "build": "20261020T162156Z-096042fa",
  "files": [
   {
    "path": "birds/CREDITS.json",
@@ -98,8 +98,8 @@
   },
   {
    "path": "js/flock_shaders.js",
-   "bytes": 38802,
-   "sha1": "3c7f5dd030772255e9d33d13c48b560b76fb28f5"
+   "bytes": 38975,
+   "sha1": "062c18827a4a93b07ae7d496b669394704752065"
   },
   {
    "path": "js/main.js",
@@ -118,8 +118,8 @@
   },
   {
    "path": "js/state.js",
-   "bytes": 5841,
-   "sha1": "21c809c3dd366ebb5483a23087f9b19ffe8769b1"
+   "bytes": 5778,
+   "sha1": "b830459db1f38ef13ba323f20eeebaf4be0018f4"
   },
   {
    "path": "js/trails.js",

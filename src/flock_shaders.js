@@ -19,7 +19,9 @@ vec3 skyAerial(vec3 col, vec3 wpos) {
   // in-scatter colour = the sky seen along this ray; below the horizon that is the (darker) hazed ground / sea, so a
   // near bird is never hazed toward a colour brighter than what lies behind it
   vec3 sky = mu >= 0.0 ? mix(uHorizonColor, uZenithColor, clamp(mu, 0.0, 1.0)) : uHorizonColor * mix(1.0, 0.35, clamp(-mu * 6.0, 0.0, 1.0));
-  return mix(col, sky, min(uAerialMax, 1.0 - exp(-uExtinction * dist)));
+  // silhouette looks (signature, dusk): a photographer's long lens on a bright overcast day keeps the birds near-black
+  float ext = uLook == 1 ? uExtinction : 0.3 * uExtinction;
+  return mix(col, sky, min(uAerialMax, 1.0 - exp(-ext * dist)));
 }
 `;
 
@@ -721,7 +723,7 @@ void main() {
   // edge-on only its body; this is what makes an agitation wave read as a dark band crossing the flock
   {
     vec3 vd = normalize(P - cameraPosition);
-    vAlpha *= mix(0.4, 1.0, abs(dot(U, vd)));
+    vAlpha *= mix(0.65, 1.0, abs(dot(U, vd)));
   }
 #endif
   vWPos = wp;
