@@ -1,5 +1,7 @@
 # Murmuration: handoff to another machine
 
+**2026-10-20, NEXT:** the page is built and live at https://noahsadler21.github.io/murmuration/ (repo github.com/noahsadler21/murmuration). The next job is the bird realism pass in `BIRD-REALISM.md`: a one-bird look test first. On the remote desktop, say *"Do the bird realism look test per BIRD-REALISM.md."* The status table below is from the 10-19 pause and is out of date.
+
 Paused on 2026-10-19 at about 17:15. The user freed the GPU and wants to continue on their remote desktop. This folder is in OneDrive, so it syncs on its own. Wait for the sync to finish before starting (SPEC.md, src/, blender/, models/ and workflow/ should all be present).
 
 ## Where it stands
