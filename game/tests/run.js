@@ -1,0 +1,85 @@
+// Headless gameplay test:  node game/tests/run.js
+// Serves the repo, loads game/index.html in headless Chrome/Edge and drives full runs with scripted input:
+//   lane   a bot that follows the guide       → high in-line %, few or no collisions
+//   idle   no input at all                    → a poor grade (the flock leaves you behind)
+//   ram    a bot that flies at its neighbours → collisions, birds knocked out of the sky and into the sea
+//   fish   a bot that dives at flying fish    → fish caught, at a cost in in-line %
+//   keys   real keyboard events via CDP       → the input path works end to end
+// Writes game/tests/results.json and screenshots to captures/.
+const fs = require('fs');
+const path = require('path');
+const { open, sleep } = require('./cdp.js');
+
+const checks = [];
+const check = (name, ok, info) => { checks.push({ name, ok: !!ok, info }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}  ${JSON.stringify(info)}`); };
+
+(async () => {
+  const s = await open({ width: 1280, height: 720, dsf: 1.25 });
+  const out = {};
+  try {
+    await s.nav('game/index.html?test=1');
+    await sleep(1500);
+    check('title screen shows', await s.evalp(`game.G.mode === 'title' && !document.getElementById('title').classList.contains('hidden')`), {});
+
+    // lane bot, full run
+    let r = JSON.parse(await s.evalp(`game.start({seed: 21, diff: 'flock', skipIntro: true}); game.bot('lane'); JSON.stringify(game.advance(${125}))`));
+    out.lane = r;
+    check('lane bot finishes the run', r.mode === 'end' && r.result, r.result);
+    check('lane bot is in line > 85 %', r.pathPct > 85, { pathPct: r.pathPct });
+    check('lane bot has ≤ 2 collisions', r.collisions <= 2, { collisions: r.collisions });
+    await s.evalp('game.G.manual = true; game.render(); 1'); await s.shot('game_results.png'); await s.evalp('game.G.manual = false; 1');
+    check('results screen shows a grade', await s.evalp(`!document.getElementById('results').classList.contains('hidden') && document.getElementById('rGrade').textContent.length === 1`),
+      { grade: await s.evalp(`document.getElementById('rGrade').textContent`) });
+
+    // idle: no input
+    r = JSON.parse(await s.evalp(`game.start({seed: 21, diff: 'flock', skipIntro: true}); game.bot(null); game.input.override = {sx: 0, sy: 0}; JSON.stringify(game.advance(125))`));
+    out.idle = r;
+    check('idle player grades poorly (< 70 %)', r.pathPct < 70, { pathPct: r.pathPct, grade: r.result && r.result.grade });
+
+    // ram bot: collisions and falling birds
+    r = JSON.parse(await s.evalp(`game.input.override = null; game.start({seed: 22, diff: 'flock', skipIntro: true}); game.bot('ram'); JSON.stringify(game.advance(14))`));
+    out.ram = r;
+    check('ram bot collides', r.collisions >= 3, { collisions: r.collisions });
+    check('hit birds fall (falling or already in the sea)', r.falling + r.lost >= 1, { falling: r.falling, lost: r.lost });
+    check('collisions are penalised (score < lane pace)', r.score < 14 * 25, { score: r.score });
+    await s.evalp('game.bot(null); game.input.override = {sx: 0, sy: 0}; game.advance(0.6); game.G.manual = true; game.render(); 1'); await s.shot('game_ram.png'); await s.evalp('game.G.manual = false; 1');
+    r = JSON.parse(await s.evalp(`JSON.stringify(game.advance(6))`));
+    check('falling birds reach the sea and leave the flock', r.lost >= 1, { lost: r.lost, falling: r.falling });
+
+    // fish bot
+    r = JSON.parse(await s.evalp(`game.input.override = null; game.start({seed: 23, diff: 'flock', skipIntro: true}); game.bot('fish'); JSON.stringify(game.advance(125))`));
+    out.fish = r;
+    check('fish bot catches flying fish', r.fish >= 3, { fish: r.fish, spawned: r.fishSpawned });
+    check('chasing fish costs in-line %', r.pathPct < out.lane.pathPct, { fishBot: r.pathPct, laneBot: out.lane.pathPct });
+
+    // keyboard input end to end (CDP key events): hold right arrow, the bird turns right
+    await s.evalp(`game.input.override = null; game.bot(null); game.start({seed: 24, diff: 'storm', skipIntro: true}); game.advance(1); 1`);
+    const yaw0 = await s.evalp('game.G.player.yaw');
+    await s.send('Input.dispatchKeyEvent', { type: 'keyDown', code: 'ArrowRight', key: 'ArrowRight', windowsVirtualKeyCode: 39 });
+    await s.evalp('game.advance(0.8); 1');
+    await s.send('Input.dispatchKeyEvent', { type: 'keyUp', code: 'ArrowRight', key: 'ArrowRight', windowsVirtualKeyCode: 39 });
+    const yaw1 = await s.evalp('game.G.player.yaw');
+    check('ArrowRight turns the bird right (yaw decreases)', yaw1 < yaw0 - 0.3, { yaw0, yaw1 });
+
+    // intro countdown and live HUD
+    await s.evalp(`game.start({seed: 25, diff: 'calm'}); 1`);
+    await sleep(1200);
+    check('intro countdown shows', await s.evalp(`game.G.mode === 'intro' && !document.getElementById('count').classList.contains('hidden')`), {});
+    await sleep(2600);
+    check('play starts after the countdown', await s.evalp(`game.G.mode === 'play'`), {});
+    check('HUD shows a live %', await s.evalp(`/^\\d+$/.test(document.getElementById('pct').textContent)`), { pct: await s.evalp(`document.getElementById('pct').textContent`) });
+
+    // frame rate (headless GPU; indicative only)
+    await s.evalp(`game.bot('lane'); 1`);
+    await sleep(3000);
+    out.fps = (await s.evalp('JSON.stringify(game.stats())'));
+    console.log('fps sample', out.fps);
+
+    const er = s.errors();
+    check('console is clean', er.length === 0, er.slice(0, 5));
+  } finally { await s.close(); }
+  fs.writeFileSync(path.join(__dirname, 'results.json'), JSON.stringify({ when: new Date().toISOString(), checks, runs: out }, null, 1));
+  const bad = checks.filter((c) => !c.ok);
+  console.log(bad.length ? `\n${bad.length} FAILED` : `\nall ${checks.length} checks passed`);
+  process.exit(bad.length ? 1 : 0);
+})().catch((e) => { console.error(e); process.exit(1); });

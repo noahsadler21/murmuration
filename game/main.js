@@ -1,0 +1,782 @@
+// main.js: One Bird, a starling-murmuration game. You are one bird in the flock: hold your place, don't hit your
+// neighbours, snatch flying fish when the flock skims the sea.
+import * as THREE from 'three';
+import { loadStarlings, VatLOD, quatFromFwdRoll } from './birds.js';
+import { Path, Flock, mulberry32 } from './flock.js';
+import { Input, Player } from './player.js';
+import { World, Spray, Rings, Feathers, makeEnv, sharedUniforms, LOOK } from './fx.js';
+import { FishSchool } from './fish.js';
+import { Sound } from './audio.js';
+import * as SH from './shaders.js';
+
+const QS = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+const wrapPi = (a) => { a = (a + Math.PI) % (2 * Math.PI); if (a < 0) a += 2 * Math.PI; return a - Math.PI; };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('onebird.' + k); return v === null ? d : JSON.parse(v); } catch (_) { return d; } },
+  set(k, v) { try { localStorage.setItem('onebird.' + k, JSON.stringify(v)); } catch (_) { /* storage blocked */ } },
+};
+
+const DIFF = {
+  calm: { label: 'Calm', assist: 0.85, pace: 1.0, ramp: 0.78, tol: 1.3, gust: 0, dodge: 2.8, catchR: 1.2, hitR: 0.26, crossers: 0.5, waves: 0.7 },
+  flock: { label: 'Flock', assist: 0.55, pace: 0.75, ramp: 1.0, tol: 1.0, gust: 0.8, dodge: 2.0, catchR: 1.0, hitR: 0.3, crossers: 1, waves: 1 },
+  storm: { label: 'Storm', assist: 0.22, pace: 0.45, ramp: 1.22, tol: 0.85, gust: 2.0, dodge: 1.5, catchR: 0.85, hitR: 0.32, crossers: 1.4, waves: 1.3 },
+};
+const RUN_T = +(QS.get('runT') || 120);
+const SWEEPS = [[21, 29], [50, 58], [78, 86], [103, 111]].map(([a, b]) => ({ t0: a * RUN_T / 120, t1: b * RUN_T / 120 }));
+const SLOT = { a: -3, r: 2.5, u: 0.4 };
+
+const coarse = matchMedia('(pointer: coarse)').matches;
+const small = Math.min(screen.width, screen.height) < 600;
+const N_BIRDS = +(QS.get('birds') || (QS.get('q') === 'high' ? 7000 : QS.get('q') === 'low' || coarse || small ? 1600 : 4000));
+
+// ------------------------------------------------------------------------------------------------ renderer & scene
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: QS.has('test') });
+if (!renderer.capabilities.isWebGL2) { $('loadmsg').textContent = 'This game needs WebGL2.'; throw new Error('WebGL2 required'); }
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NoToneMapping;
+const DPR_CAP = coarse ? 2 : 1.75;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.05, 9000);
+const U = sharedUniforms();
+const world = new World(scene, U);
+const env = makeEnv(renderer);
+const spray = new Spray(scene, U);
+const down = new Spray(scene, U, 300, { color: [0.16, 0.14, 0.12], gravity: 0.6, drag: 2.2 });   // puffs of down from a hit
+const rings = new Rings(scene);
+const feathers = new Feathers(scene, env);
+const fishes = new FishSchool(scene, env, rings, spray);
+const sound = new Sound();
+const input = new Input(canvas);
+input.invertY = store.get('invertY', false);
+input.mouseSteer = store.get('mouseSteer', true);
+
+// guide dots along the slot's future path
+const GN = 34;
+const guide = (() => {
+  const g = new THREE.BufferGeometry();
+  const p = new Float32Array(GN * 3), a = new Float32Array(GN), s = new Float32Array(GN);
+  g.setAttribute('position', new THREE.BufferAttribute(p, 3)); g.setAttribute('aA', new THREE.BufferAttribute(a, 1)); g.setAttribute('aS', new THREE.BufferAttribute(s, 1));
+  const m = new THREE.ShaderMaterial({ vertexShader: SH.DOT_VERT, fragmentShader: SH.DOT_FRAG, transparent: true, depthWrite: false,
+    uniforms: { uPxPerM: U.uPxPerM, uCol: { value: LOOK.accent.clone() } } });
+  const pts = new THREE.Points(g, m); pts.frustumCulled = false; pts.renderOrder = 8;
+  scene.add(pts);
+  return { pts, g, p, a, s };
+})();
+
+// hoops: thin rings across the slot's path every 0.45 s ahead, perpendicular to the flock's flow
+const hoops = [];
+{
+  const g = new THREE.PlaneGeometry(2, 2);
+  for (let k = 0; k < 4; k++) {
+    const m = new THREE.ShaderMaterial({ vertexShader: SH.RING_VERT, fragmentShader: SH.RING_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      uniforms: { uCol: { value: LOOK.accent.clone() }, uA: { value: 0 }, uR: { value: 0.88 }, uW: { value: 0.028 } } });
+    const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false; mesh.renderOrder = 8; mesh.visible = false;
+    scene.add(mesh);
+    hoops.push({ mesh, m });
+  }
+}
+let lods = null, hero = null, ghost = null;
+let assets = null;
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR_CAP));
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  overlay.width = Math.round(w * Math.min(window.devicePixelRatio || 1, 2)); overlay.height = Math.round(h * Math.min(window.devicePixelRatio || 1, 2));
+  updatePx();
+}
+function updatePx() {
+  const hpx = renderer.domElement.height;
+  U.uRes.value.set(renderer.domElement.width, hpx);
+  U.uPxPerM.value = hpx / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+}
+const overlay = $('ov');
+const octx = overlay.getContext('2d');
+window.addEventListener('resize', resize);
+
+// ------------------------------------------------------------------------------------------------ game state
+const G = {
+  mode: 'loading', t: 0, diffKey: store.get('diff', 'flock'), seed: 1,
+  path: null, flock: null, player: new Player(), R: mulberry32(7),
+  score: 0, pathPts: 0, qSum: 0, qTime: 0, q: 0, collisions: 0, dunks: 0, fish: 0, combo: 0, bestCombo: 0, lastCatch: -99,
+  hist: [], histAcc: 0, histT: 0, nextWave: 0, nextCross: 0, nextFish: 0, toasts: [], shake: 0, timeScale: 1, slowT: 0,
+  fovKick: 0, flash: 0, bot: null, orbitA: 0, introT: 0, phaseShown: {}, lastQ: 1,
+};
+const tmpS = { x: 0, y: 0, z: 0, fx: 0, fy: 0, fz: 1, bank: 0, v: 13 };
+const tmpA = { ...tmpS }, tmpB = { ...tmpS };
+const camState = { pos: new THREE.Vector3(0, 30, -20), look: new THREE.Vector3(0, 30, 0), fwd: new THREE.Vector3(0, 0, 1), up: new THREE.Vector3(0, 1, 0), init: false };
+const qtmp = [0, 0, 0, 1];
+
+function profileFor(run) {
+  const D = DIFF[G.diffKey];
+  if (!run) return () => ({ turn: 0.5, tau: 0.9, hold: 4 });
+  return (t) => {
+    const p = clamp(t / RUN_T, 0, 1);
+    const e = smooth(0.03, 0.95, p);
+    return { turn: Math.min(1.35, (0.26 + 0.82 * e) * D.ramp), tau: lerp(1.0, 0.42, e), hold: lerp(4.6, 2.0, e) };
+  };
+}
+
+function newWorld(run, seed) {
+  G.seed = seed;
+  const sweeps = run ? SWEEPS : [{ t0: 24, t1: 32 }, { t0: 74, t1: 82 }, { t0: 124, t1: 132 }];
+  G.path = new Path(seed, { profile: profileFor(run), sweeps, tStart: -8, alt: 32 });
+  const D = DIFF[G.diffKey];
+  G.flock = new Flock({ N: N_BIRDS, seed, path: G.path, slot: SLOT });
+  G.flock.dodgeSpeed = D.dodge; G.flock.hitR = D.hitR;
+  G.R = mulberry32(seed * 7 + 3);
+  G.path.ensure(10);
+}
+
+// ------------------------------------------------------------------------------------------------ loading
+async function boot() {
+  resize();
+  const base = new URL('../assets/birds/', location.href).href;
+  assets = await loadStarlings(base, (k) => { $('loadbar').style.width = Math.round(k * 100) + '%'; });
+  const shared = U;
+  lods = {
+    near: new VatLOD(assets.retro, { max: N_BIRDS, defines: { TEXTURED: 1 }, shared, dark: 0.42 }),
+    mid: new VatLOD(assets.sil, { max: N_BIRDS, defines: { DILATE: 1 }, shared, dark: 0.42 }),
+    far: new VatLOD(assets.micro, { max: N_BIRDS, defines: { MINPIXEL: 1, DILATE: 1 }, shared, dark: 0.42, premult: true, renderOrder: 3 }),
+  };
+  hero = new VatLOD(assets.real, { max: 1, defines: { TEXTURED: 1, NORMALMAP: 1, SMOOTH_NRM: 1, IRID: 1 }, shared, dark: 0.85 });
+  ghost = new VatLOD(assets.real, { max: 1, defines: { GHOST: 1, SMOOTH_NRM: 1 }, shared, transparent: true, renderOrder: 9 });
+  ghost.uniforms.uGhost.value.copy(LOOK.accent);
+  for (const L of [lods.near, lods.mid, lods.far, hero, ghost]) scene.add(L.mesh);
+  newWorld(false, 11);
+  G.t = 0;
+  // warm the shaders up so the first frame of play doesn't hitch
+  setMode('title');
+  frame(0.016);
+  renderer.compile(scene, camera);
+  $('loading').classList.add('hidden');
+  window.ready = true;
+  requestAnimationFrame(loop);
+}
+
+// ------------------------------------------------------------------------------------------------ modes
+function setMode(m) {
+  G.mode = m;
+  document.body.dataset.mode = m;
+  $('title').classList.toggle('hidden', m !== 'title');
+  $('results').classList.toggle('hidden', m !== 'end');
+  $('pause').classList.toggle('hidden', m !== 'paused');
+  $('hud').classList.toggle('hidden', !(m === 'play' || m === 'intro' || m === 'paused'));
+}
+
+function startRun(opts = {}) {
+  if (opts.diff) G.diffKey = opts.diff;
+  store.set('diff', G.diffKey);
+  sound.start();
+  const seed = opts.seed ?? ((Math.random() * 1e9) | 0);
+  newWorld(true, seed);
+  Object.assign(G, {
+    score: 0, pathPts: 0, qSum: 0, qTime: 0, q: 1, collisions: 0, dunks: 0, fish: 0, combo: 0, bestCombo: 0, lastCatch: -99,
+    hist: [], histAcc: 0, histT: 0, nextWave: 17 * RUN_T / 120, nextCross: 34 * RUN_T / 120, nextFish: 0, shake: 0, timeScale: 1, slowT: 0,
+    fovKick: 0, flash: 0, phaseShown: {}, lastQ: 1,
+  });
+  fishes.caught = fishes.missed = fishes.spawned = 0;
+  for (const f of fishes.list) f.state = 'off';
+  const introLen = opts.skipIntro ? 0 : 3.2;
+  G.t = -introLen;
+  G.introT = 0; G.introLen = introLen;
+  G.flock.slotAt(G.t, tmpS);
+  const S = slotFlow(G.t);
+  G.player.reset(tmpS.x, tmpS.y, tmpS.z, Math.atan2(S.fx, S.fz), Math.asin(S.fy), S.v);
+  G.camFrom = { pos: camState.pos.clone(), look: camState.look.clone() };
+  camState.init = false;
+  setMode(introLen > 0 ? 'intro' : 'play');
+  $('count').classList.toggle('hidden', introLen <= 0);
+  renderTimeline();
+}
+
+function endRun() {
+  setMode('end');
+  for (const f of floaters) f.el.remove();
+  floaters.length = 0;
+  const pct = G.qTime > 0 ? 100 * G.qSum / G.qTime : 0;
+  const eff = pct - 2 * G.collisions - 1.5 * G.dunks;
+  const grade = eff >= 93 ? 'S' : eff >= 85 ? 'A' : eff >= 74 ? 'B' : eff >= 60 ? 'C' : 'D';
+  const key = 'best.' + G.diffKey;
+  const best = store.get(key, 0);
+  const score = Math.round(G.score);
+  if (score > best) store.set(key, score);
+  $('rGrade').textContent = grade;
+  $('rGrade').dataset.g = grade;
+  $('rPct').textContent = pct.toFixed(1) + '%';
+  $('rHits').textContent = String(G.collisions) + (G.dunks ? ` + ${G.dunks} splashdown${G.dunks > 1 ? 's' : ''}` : '');
+  $('rFish').textContent = `${G.fish}` + (G.bestCombo > 1 ? ` · best chain ×${G.bestCombo}` : '');
+  $('rScore').textContent = score.toLocaleString();
+  $('rBest').textContent = score > best ? 'new best' : 'best ' + best.toLocaleString();
+  $('rDiff').textContent = DIFF[G.diffKey].label;
+  $('rLine').textContent = gradeLine(grade, pct);
+  drawSpark();
+  sound.chime(grade === 'S' || grade === 'A');
+  G.result = { grade, pct, collisions: G.collisions, dunks: G.dunks, fish: G.fish, score };
+}
+function gradeLine(g, pct) {
+  if (g === 'S') return 'Indistinguishable from the flock. A real starling would not notice you.';
+  if (g === 'A') return 'You moved with the murmuration. Only a sharp eye would pick you out.';
+  if (g === 'B') return 'Mostly in step. The flock forgave a few wobbles.';
+  if (g === 'C') return 'You kept up, just. The neighbours noticed.';
+  return 'The flock flew on without you. Try again on Calm, or ease off the stick.';
+}
+
+// ------------------------------------------------------------------------------------------------ helpers
+// slot direction / speed by central difference
+const flowOut = { fx: 0, fy: 0, fz: 1, v: 13 };
+function slotFlow(t) {
+  G.flock.slotAt(t - 0.04, tmpA); G.flock.slotAt(t + 0.04, tmpB);
+  const dx = tmpB.x - tmpA.x, dy = tmpB.y - tmpA.y, dz = tmpB.z - tmpA.z, l = Math.hypot(dx, dy, dz) || 1;
+  flowOut.fx = dx / l; flowOut.fy = dy / l; flowOut.fz = dz / l; flowOut.v = l / 0.08;
+  return flowOut;
+}
+
+function toast(text, kind = '', dur = 2.2) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind; el.textContent = text;
+  $('toasts').appendChild(el);
+  requestAnimationFrame(() => el.classList.add('in'));
+  setTimeout(() => { el.classList.remove('in'); el.classList.add('out'); setTimeout(() => el.remove(), 400); }, dur * 1000);
+}
+const floaters = [];
+function floatText(text, x, y, z, kind) {
+  const el = document.createElement('div');
+  el.className = 'float ' + kind; el.textContent = text;
+  $('floaters').appendChild(el);
+  floaters.push({ el, x, y, z, age: 0 });
+}
+
+function renderTimeline() {
+  const tl = $('tlMarks');
+  tl.innerHTML = '';
+  for (const s of SWEEPS) {
+    const m = document.createElement('i');
+    m.style.left = (100 * s.t0 / RUN_T) + '%'; m.style.width = (100 * (s.t1 - s.t0) / RUN_T) + '%';
+    tl.appendChild(m);
+  }
+}
+
+// ------------------------------------------------------------------------------------------------ the bot (tests, demo)
+function botInput() {
+  const P = G.player, t = G.t, F = G.flock;
+  let tx, ty, tz, mode = G.bot;
+  if (mode === 'fish') {
+    let best = null, bd = 1e9;
+    for (const f of fishes.list) {
+      if (f.state !== 'air') continue;
+      const d = Math.hypot(f.x - P.x, f.y - P.y, f.z - P.z);
+      const ahead = (f.x - P.x) * P.fx + (f.z - P.z) * P.fz;
+      if (d < 40 && ahead > -1 && d < bd) { bd = d; best = f; }
+    }
+    if (best) { const lead = Math.min(0.5, bd / 16); tx = best.x + best.vx * lead; ty = best.y + best.vy * lead; tz = best.z + best.vz * lead; }
+    else mode = 'lane';
+  }
+  if (mode === 'ram') {
+    // lock onto the nearest bird ahead and fly straight at it until it is hit (or lost)
+    let bi = G.botTarget ?? -1;
+    if (bi >= 0 && (F.state[bi] || t > G.botUntil)) bi = -1;
+    if (bi < 0) {
+      let bd = 1e9;
+      for (let i = 0; i < F.N; i++) {
+        if (F.state[i]) continue;
+        const ex = F.pos[i * 3] - P.x, ey = F.pos[i * 3 + 1] - P.y, ez = F.pos[i * 3 + 2] - P.z;
+        const ahead = ex * P.fx + ey * P.fy + ez * P.fz;
+        const d = Math.hypot(ex, ey, ez);
+        if (ahead > 0.8 && d < bd) { bd = d; bi = i; }
+      }
+      G.botTarget = bi; G.botUntil = t + 2.5;
+    }
+    if (bi >= 0) { tx = F.pos[bi * 3]; ty = F.pos[bi * 3 + 1]; tz = F.pos[bi * 3 + 2]; }
+    else mode = 'lane';
+  }
+  let along = 0;
+  if (mode === 'lane') {
+    F.slotAt(t + 0.45, tmpA); tx = tmpA.x; ty = tmpA.y; tz = tmpA.z;
+    F.slotAt(t, tmpB);
+    const S = slotFlow(t);
+    along = (P.x - tmpB.x) * S.fx + (P.y - tmpB.y) * S.fy + (P.z - tmpB.z) * S.fz;
+  }
+  const dx = tx - P.x, dy = ty - P.y, dz = tz - P.z;
+  const yawT = Math.atan2(dx, dz), pitchT = Math.atan2(dy, Math.hypot(dx, dz));
+  const A = DIFF[G.diffKey].assist;
+  const sx = clamp(-wrapPi(yawT - P.yaw) * 2.4 - P.yawRate * 0.08, -1, 1);
+  const sy = clamp((pitchT - P.pitch * (1 - A)) * 2.0, -1, 1);
+  return { sx, sy, boost: mode !== 'lane' ? true : along < -1.5, brake: mode === 'lane' && along > 1.5 };
+}
+
+// ------------------------------------------------------------------------------------------------ frame update
+function frame(dtReal) {
+  const D = DIFF[G.diffKey];
+  const playing = G.mode === 'play';
+  const running = G.mode === 'play' || G.mode === 'intro' || G.mode === 'title' || G.mode === 'end';
+  if (G.slowT > 0) { G.slowT -= dtReal; G.timeScale = lerp(G.timeScale, 0.32, 0.5); } else G.timeScale = lerp(G.timeScale, 1, 1 - Math.exp(-dtReal / 0.12));
+  const dt = running ? dtReal * G.timeScale : 0;
+  const F = G.flock, P = G.player;
+  if (running) G.t += dt;
+  const t = G.t;
+  G.path.ensure(t + 9);
+  // difficulty ramp on the flock itself
+  const p = clamp(t / RUN_T, 0, 1);
+  F.fold = G.mode === 'title' || G.mode === 'end' ? 1.5 : 0.55 + 0.95 * smooth(0.05, 0.9, p) * D.ramp;
+
+  // events: waves, crossers, fish
+  if (playing || G.mode === 'title') {
+    if (t >= G.nextWave) {
+      const strength = G.mode === 'title' ? 0.9 : 0.75 + 0.6 * p;
+      F.addWave(t + 2.4, G.R, strength * D.waves ** 0.5);
+      if (playing && !G.phaseShown.wave) { G.phaseShown.wave = 1; setTimeout(() => toast('A wave is running through the flock', 'info'), 1200); }
+      G.nextWave = t + (G.mode === 'title' ? 5 : lerp(9, 3.2, p) / D.waves) * (0.75 + 0.5 * G.R());
+    }
+    if (playing && t >= G.nextCross) {
+      const i = F.addCrosser(t, G.R, SLOT);
+      if (i >= 0 && !G.phaseShown.cross) { G.phaseShown.cross = 1; toast('Watch out: neighbours drifting through your lane', 'info', 2.6); }
+      G.nextCross = t + lerp(8, 3, p) / D.crossers * (0.7 + 0.6 * G.R());
+    }
+    if (t >= G.nextFish) spawnFish(t);
+    if (playing) {
+      for (const s of SWEEPS) {
+        const k = 'sw' + s.t0;
+        if (t > s.t0 - 2.5 && !G.phaseShown[k]) { G.phaseShown[k] = 1; toast('Sea run — dive for the flying fish', 'fish', 2.6); sound.chime(true); }
+      }
+      if (t > RUN_T * 0.4 && !G.phaseShown.mid) { G.phaseShown.mid = 1; toast('The turns are getting tighter', 'info'); }
+      if (t > RUN_T * 0.78 && !G.phaseShown.late) { G.phaseShown.late = 1; toast('Final stretch: hold on', 'info'); }
+    }
+  }
+
+  // the player
+  let S = null;
+  if (G.mode !== 'title' && G.mode !== 'end') {
+    F.slotAt(t, tmpS);
+    S = slotFlow(t);
+    if (G.mode === 'intro') {
+      // locked to the slot while the camera swoops in
+      P.reset(tmpS.x, tmpS.y, tmpS.z, Math.atan2(S.fx, S.fz), Math.asin(S.fy), S.v);
+      P.roll = tmpS.bank;
+      G.introT += dtReal;
+      const c = Math.ceil(G.introLen - G.introT);
+      $('count').textContent = c > 0 ? String(c) : 'Go';
+      if (G.introT >= G.introLen) { setMode('play'); $('count').textContent = 'Go'; setTimeout(() => $('count').classList.add('hidden'), 500); toast('Hold your place in the flock', 'info'); }
+    } else if (playing) {
+      const inp = G.bot ? (input.override = botInput(), input.read()) : input.read();
+      const n = Math.max(1, Math.ceil(dt / (1 / 120)));
+      const h = dt / n;
+      for (let k = 0; k < n; k++) {
+        const ex = P.x - tmpS.x, ey = P.y - tmpS.y, ez = P.z - tmpS.z;
+        const along = ex * S.fx + ey * S.fy + ez * S.fz;
+        P.step(h, inp, S, S.v, along, D, G.R, onDunk);
+      }
+      grade(dt, S, D);
+      if (t >= RUN_T) { endRun(); }
+    }
+  }
+
+  // flock
+  const playerForFlock = G.mode === 'play' ? P : (G.mode === 'intro' ? { ...P, invuln: 1 } : null);
+  F.update(t, dt, playerForFlock, camera.position, lods, { onHit, onSplash: (x, z, s) => { rings.ring(x, z, 1.4, 1.3, 0.5); spray.splash(x, z, s, G.R); sound.splash(0.4); } });
+  fishes.update(dt, t, G.mode === 'play' ? P : null, D.catchR, onCatch, G.R);
+  spray.update(dt); down.update(dt); rings.update(dt); feathers.update(dt);
+
+  // camera
+  updateCamera(dtReal, S);
+  world.update(t, camera);
+
+  // the player's bird, the ghost and the guide
+  hero.begin(); ghost.begin();
+  if (G.mode !== 'title' && G.mode !== 'end') {
+    quatFromFwdRoll(qtmp, P.fx, P.fy, P.fz, P.roll);
+    hero.push(P.x, P.y, P.z, 1, qtmp, P.phase, P.glide, P.bound);
+    const off = G.mode === 'play' && G.dist !== undefined ? G.dist : 0;
+    const camD = camera.position.distanceTo(_v.set(tmpS.x, tmpS.y, tmpS.z));
+    const ga = G.mode === 'play' ? smooth(0.9, 2.2, off) * smooth(1.2, 2.6, camD) * 0.6 : 0;
+    if (ga > 0.01) {
+      quatFromFwdRoll(qtmp, S.fx, S.fy, S.fz, tmpS.bank);
+      ghost.push(tmpS.x, tmpS.y, tmpS.z, 1, qtmp, (t * 13.3) % 1, 0.2, 0);
+    }
+    ghost.uniforms.uGhostA.value = ga;
+    updateGuide(t, off);
+  } else { guide.pts.visible = false; for (const h of hoops) h.mesh.visible = false; }
+  hero.end(); ghost.end();
+}
+
+function grade(dt, S, D) {
+  const P = G.player;
+  const ex = P.x - tmpS.x, ey = P.y - tmpS.y, ez = P.z - tmpS.z;
+  const al = ex * S.fx + ey * S.fy + ez * S.fz;
+  const px = ex - al * S.fx, py = ey - al * S.fy, pz = ez - al * S.fz;
+  const dist = Math.sqrt(px * px + py * py + pz * pz + (al * 0.5) ** 2);
+  const qT = 1 - smooth(1.15 * D.tol, 4.2 * D.tol, dist);
+  const cos = P.fx * S.fx + P.fy * S.fy + P.fz * S.fz;
+  const qA = smooth(0.55, 0.95, cos);
+  const q = qT * (0.4 + 0.6 * qA);
+  G.q = q; G.dist = dist; G.cos = cos;
+  G.qSum += q * dt; G.qTime += dt;
+  G.pathPts += q * dt * 25;
+  G.score += q * dt * 25;
+  G.histAcc += q * dt; G.histT += dt;
+  if (G.histT >= 1) { G.hist.push(G.histAcc / G.histT); G.histAcc = 0; G.histT = 0; }
+  if (q < 0.25 && G.lastQ >= 0.25 && dist > 6) toast('Get back to your place: fly through the rings', 'warn', 1.6);
+  G.lastQ = q;
+}
+
+function onHit(i, x, y, z) {
+  const P = G.player, F = G.flock;
+  F.knock(i, P.vx, P.vy, P.vz, G.R);
+  P.hit(G.R);
+  G.collisions++; G.score = Math.max(0, G.score - 120); G.combo = 0;
+  feathers.burst(x, y, z, P.vx, P.vy, P.vz, 18, G.R);
+  for (let k = 0; k < 40; k++) {
+    const a = G.R() * 6.283, b = G.R() * 2 - 1, sp = 0.6 + G.R() * 2.6;
+    down.emit(x, y, z, Math.cos(a) * sp + P.vx * 0.85, b * sp + P.vy * 0.85, Math.sin(a) * sp + P.vz * 0.85, 1.2 + G.R() * 1.4, 0.025 + G.R() * 0.035);
+  }
+  feathers.burst(P.x, P.y, P.z, P.vx, P.vy, P.vz, 5, G.R);
+  sound.hit();
+  G.shake = 0.5; G.flash = 1; G.slowT = Math.max(G.slowT, 0.09);
+  floatText('−120', x, y + 0.3, z, 'bad');
+  if (G.collisions === 1) toast('Collision! That bird is going down', 'warn', 1.8);
+}
+function onDunk(x, z) {
+  G.dunks++; G.score = Math.max(0, G.score - 80);
+  rings.ring(x, z, 2.2, 1.5, 0.6); spray.splash(x, z, 1.4, G.R); sound.splash(1);
+  G.shake = 0.35;
+  floatText('splash −80', x, 0.8, z, 'bad');
+}
+function onCatch(f) {
+  const t = G.t;
+  G.combo = t - G.lastCatch < 4 ? G.combo + 1 : 1;
+  G.lastCatch = t;
+  G.bestCombo = Math.max(G.bestCombo, G.combo);
+  G.fish++;
+  const pts = 100 * G.combo;
+  G.score += pts;
+  sound.fish(G.combo);
+  for (let k = 0; k < 14; k++) {
+    const a = G.R() * 6.283, b = G.R() * 2 - 1, s = 1 + G.R() * 2;
+    spray.emit(f.x, f.y, f.z, Math.cos(a) * s + f.vx * 0.3, b * s + 0.5, Math.sin(a) * s + f.vz * 0.3, 0.5 + G.R() * 0.4, 0.035);
+  }
+  G.slowT = 0.16; G.fovKick = 5;
+  floatText(G.combo > 1 ? `+${pts}  ×${G.combo}` : `+${pts}`, f.x, f.y + 0.35, f.z, 'good');
+  const el = $('sFish'); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+}
+
+function spawnFish(t) {
+  const R = G.R, F = G.flock;
+  const lead = 2.6 + R() * 0.7, tA = t + lead;
+  F.slotAt(tA, tmpA);
+  if (tmpA.y < 13.5 && G.path.sweepW(tA) > 0.3) {
+    const S = slotFlow(tA);
+    F.slotAt(tA, tmpA);
+    const hx = S.fx, hz = S.fz, hl = Math.hypot(hx, hz) || 1;
+    const fx = hx / hl, fz = hz / hl, rx = -fz, rz = fx;
+    const n = R() < 0.35 ? 2 : 1;
+    for (let k = 0; k < n; k++) {
+      const lat = (R() < 0.5 ? -1 : 1) * (0.3 + R() * (G.mode === 'title' ? 14 : 4.5));
+      const al = (R() - 0.5) * 4 + k * 1.5;
+      const ang = (R() - 0.5) * 0.7;
+      const dx = fx * Math.cos(ang) - rx * Math.sin(ang), dz = fz * Math.cos(ang) - rz * Math.sin(ang);
+      fishes.spawn(t, tA + k * 0.25, tmpA.x + rx * lat + fx * al, 1.4 + R() * 2.6, tmpA.z + rz * lat + fz * al, dx, dz, 8 + R() * 3, R);
+    }
+    G.nextFish = t + 0.8 + R() * 0.8;
+  } else {
+    // the odd fish far below the flock: a tempting, expensive detour
+    if (G.t > 3) {
+      const tA = t + 3.2;
+      const S = slotFlow(tA); F.slotAt(tA, tmpA);
+      const hl = Math.hypot(S.fx, S.fz) || 1, fx = S.fx / hl, fz = S.fz / hl;
+      const lat = (R() - 0.5) * 24;
+      fishes.spawn(t, tA, tmpA.x - fz * lat, 1.6 + R() * 2, tmpA.z + fx * lat, fx, fz, 9 + R() * 2, R);
+    }
+    G.nextFish = t + 3 + R() * 4;
+  }
+}
+
+function updateGuide(t, off) {
+  const g = guide;
+  const vis = G.mode === 'play' || G.mode === 'intro';
+  g.pts.visible = vis;
+  if (!vis) return;
+  const bright = G.mode === 'intro' ? 0.8 : 0.45 + 0.55 * smooth(0.6, 2.2, off);
+  for (let k = 0; k < GN; k++) {
+    const dtk = 0.3 + k * 0.06;
+    G.flock.slotAt(t + dtk, tmpA);
+    g.p[k * 3] = tmpA.x; g.p[k * 3 + 1] = tmpA.y; g.p[k * 3 + 2] = tmpA.z;
+    g.a[k] = bright * smooth(0, 3, k) * (1 - smooth(GN * 0.55, GN, k));
+    g.s[k] = 0.07;
+  }
+  for (const n of ['position', 'aA', 'aS']) g.g.attributes[n].needsUpdate = true;
+  hoops.forEach((h, k) => {
+    const tk = t + 0.45 * (k + 1);
+    G.flock.slotAt(tk, tmpA);
+    const bank = tmpA.bank;
+    G.flock.slotAt(tk + 0.05, tmpB);
+    const m = h.mesh;
+    m.visible = true;
+    m.position.set(tmpA.x, tmpA.y, tmpA.z);
+    m.up.set(0, 1, 0);
+    m.lookAt(tmpB.x, tmpB.y, tmpB.z);
+    m.rotateZ(bank);
+    m.scale.setScalar(0.55);
+    const cd = camera.position.distanceTo(m.position);
+    h.m.uniforms.uA.value = bright * 0.9 * smooth(1.6, 3.2, cd) * (1 - k * 0.18);
+  });
+}
+
+const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _u = new THREE.Vector3(), _f2 = new THREE.Vector3();
+function updateCamera(dt, S) {
+  const P = G.player;
+  if (G.mode === 'title' || G.mode === 'end' || !S) {
+    G.flock.centre(G.t, tmpA);
+    G.orbitA += dt * 0.045;
+    const R = 150;
+    const target = _v.set(tmpA.x, tmpA.y, tmpA.z);
+    const eye = _w.set(tmpA.x + Math.cos(G.orbitA) * R, Math.max(6, tmpA.y * 0.45 + 2), tmpA.z + Math.sin(G.orbitA) * R);
+    if (!camState.init) { camState.pos.copy(eye); camState.look.copy(target); camState.init = true; }
+    camState.pos.lerp(eye, 1 - Math.exp(-dt / 0.6)); camState.look.lerp(target, 1 - Math.exp(-dt / 0.6));
+    camera.position.copy(camState.pos); camera.up.set(0, 1, 0); camera.lookAt(camState.look);
+    camera.fov = 36;
+    // frame the flock to the right of the title panel (or above it on a phone)
+    const W = innerWidth, H = innerHeight;
+    if (G.mode === 'title') {
+      if (W > 760) camera.setViewOffset(W, H, -0.17 * W, 0, W, H); else camera.setViewOffset(W, H, 0, 0.16 * H, W, H);
+    } else camera.clearViewOffset();
+    camera.updateProjectionMatrix(); updatePx();
+    return;
+  }
+  // chase: behind and above, following a smoothed heading; a little of the bank shows in the horizon
+  const f = _u.set(P.fx, P.fy, P.fz);
+  if (!camState.init) { camState.fwd.copy(f); camState.init = true; camState.off = null; }
+  camState.fwd.lerp(f, 1 - Math.exp(-dt / 0.2)).normalize();
+  // the camera follows only part of the bird's climb or dive, so the horizon stays in view
+  const cf = _f2.set(camState.fwd.x, camState.fwd.y * 0.55, camState.fwd.z).normalize();
+  const back = 1.5 + P.boosting * 0.45, upOff = 0.4;
+  // smooth the offset from the bird, not the world position, so speed never drags the camera back
+  const want = _w.set(-cf.x * back, -cf.y * back + upOff, -cf.z * back);
+  if (!camState.off) camState.off = want.clone();
+  camState.off.lerp(want, 1 - Math.exp(-dt / 0.08));
+  let pos = new THREE.Vector3(P.x, P.y, P.z).add(camState.off);
+  pos.y = Math.max(pos.y, 0.5);
+  let lk = _v.set(P.x + cf.x * 5, P.y + cf.y * 5 + 0.4, P.z + cf.z * 5).clone();
+  if (G.mode === 'intro') {
+    const k = smooth(0, 1, G.introT / Math.max(0.01, G.introLen * 0.8));
+    const e = k * k * (3 - 2 * k);
+    pos = G.camFrom.pos.clone().lerp(pos, e);
+    lk = G.camFrom.look.clone().lerp(lk, e);
+  }
+  if (G.shake > 0) {
+    const s = G.shake * 0.09;
+    pos.x += (Math.random() - 0.5) * s; pos.y += (Math.random() - 0.5) * s; pos.z += (Math.random() - 0.5) * s;
+    G.shake = Math.max(0, G.shake - dt * 1.6);
+  }
+  if (camera.view && camera.view.enabled) camera.clearViewOffset();
+  camState.pos.copy(pos); camState.look.copy(lk);
+  camera.position.copy(pos);
+  // roll a quarter of the bird's bank into the camera
+  const r = P.roll * 0.22;
+  const rt = new THREE.Vector3().crossVectors(cf, new THREE.Vector3(0, 1, 0)).normalize();
+  camera.up.set(0, 1, 0).multiplyScalar(Math.cos(r)).addScaledVector(rt, -Math.sin(r));
+  camera.lookAt(lk);
+  G.fovKick = Math.max(0, G.fovKick - dt * 12);
+  const fov = (G.mode === 'intro' ? lerp(40, 62, smooth(0, 1, G.introT / G.introLen)) : 62) + P.boosting * 8 + G.fovKick;
+  if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); updatePx(); }
+}
+
+// ------------------------------------------------------------------------------------------------ HUD
+let fpsE = 60;
+function hud(dtReal) {
+  const P = G.player;
+  if (G.mode === 'play' || G.mode === 'intro' || G.mode === 'paused') {
+    const pct = G.qTime > 0.2 ? 100 * G.qSum / G.qTime : 100;
+    $('pct').textContent = G.mode === 'intro' ? '–' : pct.toFixed(0);
+    $('qfill').style.width = (100 * (G.mode === 'intro' ? 1 : G.q)) + '%';
+    $('hud').dataset.q = G.q > 0.75 ? 'good' : G.q > 0.3 ? 'mid' : 'bad';
+    $('sScore').textContent = Math.round(G.score).toLocaleString();
+    $('sFish').textContent = G.fish;
+    $('sHits').textContent = G.collisions + G.dunks;
+    const rem = Math.max(0, RUN_T - Math.max(0, G.t));
+    $('sTime').textContent = `${Math.floor(rem / 60)}:${String(Math.floor(rem % 60)).padStart(2, '0')}`;
+    $('tlFill').style.width = (100 * clamp(G.t / RUN_T, 0, 1)) + '%';
+    $('boostFill').style.width = (100 * P.energy) + '%';
+    $('boost').classList.toggle('on', P.boosting > 0.5);
+    G.flash = Math.max(0, G.flash - dtReal * 2.5);
+    $('flash').style.opacity = (G.flash * 0.55).toFixed(3);
+  }
+  // floating texts
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i];
+    f.age += dtReal;
+    const v = _v.set(f.x, f.y + f.age * 0.6, f.z).project(camera);
+    if (f.age > 1.3 || v.z > 1) { f.el.remove(); floaters.splice(i, 1); continue; }
+    f.el.style.transform = `translate(${(v.x * 0.5 + 0.5) * innerWidth}px, ${(-v.y * 0.5 + 0.5) * innerHeight}px) translate(-50%, -50%)`;
+    f.el.style.opacity = String(1 - smooth(0.8, 1.3, f.age));
+  }
+  drawOverlay();
+  fpsE = lerp(fpsE, 1 / Math.max(dtReal, 1e-3), 0.05);
+}
+
+function drawOverlay() {
+  const W = overlay.width, H = overlay.height, k = W / innerWidth;
+  octx.clearRect(0, 0, W, H);
+  if (!(G.mode === 'play' || G.mode === 'intro')) return;
+  const acc = '#f07634';
+  octx.save(); octx.scale(k, k);
+  const w = innerWidth, h = innerHeight;
+  // fish in the air: a thin ring around each; fish about to leap: a small tick on the water
+  for (const f of fishes.list) {
+    if (f.state !== 'air' && f.state !== 'lurk') continue;
+    const x = f.state === 'air' ? f.x : f.bx, y = f.state === 'air' ? f.y : 0, z = f.state === 'air' ? f.z : f.bz;
+    const v = _v.set(x, y, z).project(camera);
+    if (v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) continue;
+    const d = camera.position.distanceTo(_w.set(x, y, z));
+    if (d > 90) continue;
+    const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h;
+    const r = clamp(0.45 * U.uPxPerM.value / k / d, 7, 40);
+    octx.globalAlpha = f.state === 'air' ? clamp(1.4 - d / 70, 0.3, 1) : 0.5 * clamp(1 - (f.tB - G.t), 0, 1);
+    octx.strokeStyle = acc; octx.lineWidth = 1.5;
+    octx.beginPath();
+    if (f.state === 'air') octx.arc(sx, sy, r, 0, Math.PI * 2);
+    else { octx.moveTo(sx - r, sy); octx.lineTo(sx + r, sy); }
+    octx.stroke();
+  }
+  octx.globalAlpha = 1;
+  // where is my place? when the slot leaves the screen, an arrow at the edge points back to it
+  if (G.mode === 'play') {
+    const v = _v.set(tmpS.x, tmpS.y, tmpS.z).project(camera);
+    const behind = v.z > 1;
+    let x = v.x, y = v.y;
+    if (behind) { x = -x; y = -y; }
+    const off = behind || Math.abs(x) > 0.92 || Math.abs(y) > 0.88;
+    if (off && G.dist > 2.5) {
+      const m = Math.max(Math.abs(x) / 0.9, Math.abs(y) / 0.84, 1e-3);
+      x /= m; y /= m;
+      const sx = (x * 0.5 + 0.5) * w, sy = (-y * 0.5 + 0.5) * h;
+      const a = Math.atan2(-y, x);
+      octx.translate(sx, sy); octx.rotate(a);
+      octx.fillStyle = acc; octx.globalAlpha = 0.9;
+      octx.beginPath(); octx.moveTo(12, 0); octx.lineTo(-7, -8); octx.lineTo(-3, 0); octx.lineTo(-7, 8); octx.closePath(); octx.fill();
+      octx.setTransform(k, 0, 0, k, 0, 0);
+    }
+  }
+  // steering feedback: mouse reticle relative to the dead zone, or the touch stick
+  if (input.raw.src === 'mouse' && G.mode === 'play') {
+    octx.globalAlpha = 0.5; octx.strokeStyle = '#1d1e20'; octx.lineWidth = 1;
+    octx.beginPath(); octx.arc(w / 2, h / 2, 0.07 * 0.3 * Math.min(w, h), 0, Math.PI * 2); octx.stroke();
+    octx.globalAlpha = 0.8;
+    octx.beginPath(); octx.arc(input.mouse.x, input.mouse.y, 5, 0, Math.PI * 2); octx.stroke();
+  } else if (input.touching) {
+    const T = input.touch, R = 0.16 * Math.min(w, h);
+    octx.globalAlpha = 0.35; octx.strokeStyle = '#1d1e20'; octx.lineWidth = 1.5;
+    octx.beginPath(); octx.arc(T.x0, T.y0, R, 0, Math.PI * 2); octx.stroke();
+    octx.globalAlpha = 0.6; octx.fillStyle = '#1d1e20';
+    const dx = T.x - T.x0, dy = T.y - T.y0, l = Math.hypot(dx, dy), m = l > R ? R / l : 1;
+    octx.beginPath(); octx.arc(T.x0 + dx * m, T.y0 + dy * m, 14, 0, Math.PI * 2); octx.fill();
+  }
+  octx.restore();
+}
+
+function drawSpark() {
+  const c = $('spark'), x = c.getContext('2d');
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const W = c.clientWidth || 300, H = c.clientHeight || 60;
+  c.width = W * dpr; c.height = H * dpr; x.scale(dpr, dpr);
+  x.clearRect(0, 0, W, H);
+  const h = G.hist; if (h.length < 2) return;
+  // sea runs as faint bands behind the line
+  x.fillStyle = 'rgba(47,58,74,0.07)';
+  for (const s of SWEEPS) x.fillRect(W * s.t0 / RUN_T, 0, W * (s.t1 - s.t0) / RUN_T, H);
+  x.strokeStyle = 'rgba(29,30,32,0.15)'; x.lineWidth = 1;
+  x.beginPath(); x.moveTo(0, H * 0.25); x.lineTo(W, H * 0.25); x.stroke();
+  x.strokeStyle = '#2f3a4a'; x.lineWidth = 1.6; x.lineJoin = 'round';
+  x.beginPath();
+  h.forEach((q, i) => { const px = (i + 0.5) / RUN_T * W, py = H - 2 - q * (H - 6); i ? x.lineTo(px, py) : x.moveTo(px, py); });
+  x.stroke();
+}
+
+// ------------------------------------------------------------------------------------------------ loop
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+  last = now;
+  if (!G.manual) {
+    frame(dt);
+    hud(dt);
+    sound.update(G.player.speed, G.flock.nearCount || 0, G.player.y, G.mode === 'play');
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(loop);
+}
+
+// ------------------------------------------------------------------------------------------------ UI wiring
+function pauseToggle(force) {
+  if (G.mode === 'play' && force !== false) { setMode('paused'); }
+  else if (G.mode === 'paused' && force !== true) { setMode('play'); last = performance.now(); }
+}
+document.querySelectorAll('[data-diff]').forEach((b) => {
+  b.setAttribute('aria-pressed', String(b.dataset.diff === G.diffKey));
+  b.addEventListener('click', () => {
+    G.diffKey = b.dataset.diff; store.set('diff', G.diffKey);
+    document.querySelectorAll('[data-diff]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.diff === G.diffKey)));
+    $('bestLine').textContent = bestText();
+  });
+});
+function bestText() { const b = store.get('best.' + G.diffKey, 0); return b ? `Best on ${DIFF[G.diffKey].label}: ${b.toLocaleString()}` : ''; }
+$('bestLine').textContent = bestText();
+$('birdCount').textContent = N_BIRDS.toLocaleString();
+$('fly').addEventListener('click', () => startRun());
+$('again').addEventListener('click', () => startRun());
+$('menu').addEventListener('click', () => { newWorld(false, 11); G.t = 0; camState.init = false; G.nextWave = 0; G.nextFish = 0; setMode('title'); });
+$('resume').addEventListener('click', () => pauseToggle(false));
+$('quit').addEventListener('click', () => { newWorld(false, 11); G.t = 0; camState.init = false; G.nextWave = 0; G.nextFish = 0; setMode('title'); });
+const optInv = $('optInvert'), optMouse = $('optMouse');
+optInv.checked = input.invertY; optMouse.checked = input.mouseSteer;
+optInv.addEventListener('change', () => { input.invertY = optInv.checked; store.set('invertY', optInv.checked); });
+optMouse.addEventListener('change', () => { input.mouseSteer = optMouse.checked; store.set('mouseSteer', optMouse.checked); });
+function syncMute() { document.querySelectorAll('.mute').forEach((b) => { b.setAttribute('aria-pressed', String(sound.muted)); b.textContent = sound.muted ? 'Sound off' : 'Sound on'; }); }
+document.querySelectorAll('.mute').forEach((b) => b.addEventListener('click', () => { sound.start(); sound.setMuted(!sound.muted); syncMute(); }));
+syncMute();
+const boostBtn = $('boostBtn');
+boostBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); input.touchBoost = true; });
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) boostBtn.addEventListener(ev, () => { input.touchBoost = false; });
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' || e.code === 'KeyP') pauseToggle();
+  else if (e.code === 'KeyM') { sound.start(); sound.setMuted(!sound.muted); syncMute(); }
+  else if (e.code === 'Enter' && (G.mode === 'title' || G.mode === 'end')) startRun();
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseToggle(true); });
+$('pause').addEventListener('click', (e) => { if (e.target === $('pause')) pauseToggle(false); });
+
+// ------------------------------------------------------------------------------------------------ test / debug API
+window.game = {
+  G, DIFF, SLOT, RUN_T, fishes, input, camera, scene, renderer, get lods() { return lods; }, get hero() { return hero; }, get ghost() { return ghost; },
+  start: (o) => startRun(o),
+  bot: (m) => { G.bot = m || null; if (!m) input.override = null; },
+  // advance the simulation in fixed steps without waiting for frames (headless tests)
+  advance(sec, dt = 1 / 60) {
+    G.manual = true;
+    const n = Math.round(sec / dt);
+    for (let i = 0; i < n && G.mode !== 'end'; i++) frame(dt);
+    hud(dt);
+    renderer.render(scene, camera);
+    G.manual = false;
+    return this.stats();
+  },
+  render() { renderer.render(scene, camera); },
+  stats() {
+    const F = G.flock;
+    let falling = 0; for (let i = 0; i < F.N; i++) if (F.state[i] === 1) falling++;
+    return {
+      mode: G.mode, t: +G.t.toFixed(2), diff: G.diffKey, pathPct: G.qTime > 0 ? +(100 * G.qSum / G.qTime).toFixed(2) : null,
+      q: +G.q.toFixed(3), dist: G.dist && +G.dist.toFixed(2), collisions: G.collisions, dunks: G.dunks, fish: G.fish, fishSpawned: fishes.spawned,
+      fishMissed: fishes.missed, score: Math.round(G.score), birds: F.N, falling, lost: F.lost, fps: Math.round(fpsE), result: G.result || null,
+      draw: { near: lods.near.n, mid: lods.mid.n, far: lods.far.n }, calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
+    };
+  },
+  end: () => endRun(),
+};
+
+boot().catch((e) => { console.error(e); $('loadmsg').textContent = 'Could not load the birds: ' + e.message; });
