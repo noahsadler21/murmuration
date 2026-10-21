@@ -598,7 +598,7 @@ function frame(dtReal) {
     const showHero = !(G.gameMode === 'brawl' && brawl.on && brawl.player.dead);
     const hx = P.x + P.fx * bd.surge * fl, hy = P.y + P.sinkY + bd.heave * fl, hz = P.z + P.fz * bd.surge * fl;
     if (showHero) hero.push(hx, hy, hz, 1, qtmp, P.phase, P.glide, P.bound);
-    if (heroGLB) { heroGLB.root.visible = showHero; if (showHero) heroGLB.update(hx, hy, hz, qtmp, P.phase, P.glide + P.bound, dtReal); }
+    if (heroGLB) { heroGLB.root.visible = showHero; if (showHero) heroGLB.update(hx, hy, hz, qtmp, P.phase, P.glide, P.bound, dtReal); }
     const off = G.mode === 'play' && G.dist !== undefined ? G.dist : 0;
     const camD = camera.position.distanceTo(_v.set(tmpS.x, tmpS.y, tmpS.z));
     const ga = G.mode === 'play' && G.gameMode === 'murm' ? smooth(0.9, 2.2, off) * smooth(1.2, 2.6, camD) * 0.6 : 0;

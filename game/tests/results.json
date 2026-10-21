@@ -1,5 +1,5 @@
 {
- "when": "2026-10-21T18:30:35.877Z",
+ "when": "2026-10-21T18:34:37.306Z",
  "checks": [
   {
    "name": "title screen shows",
@@ -98,8 +98,8 @@
    "name": "ArrowRight turns the bird right (yaw decreases)",
    "ok": true,
    "info": {
-    "yaw0": 2.839451206566078,
-    "yaw1": 1.434852603801205
+    "yaw0": 2.8368706736864984,
+    "yaw1": 1.496800960175384
    }
   },
   {
@@ -130,8 +130,8 @@
    "name": "Fish Frenzy: lots of fish leap and the bot catches some",
    "ok": true,
    "info": {
-    "leapt": 184,
-    "caught": 15,
+    "leapt": 181,
+    "caught": 17,
     "grade": "C"
    }
   },
@@ -139,7 +139,7 @@
    "name": "Fish Frenzy results screen",
    "ok": true,
    "info": {
-    "pct": "15 of 184"
+    "pct": "17 of 181"
    }
   },
   {
@@ -157,11 +157,11 @@
    "ok": true,
    "info": {
     "grade": "C",
-    "place": 9,
+    "place": 8,
     "won": false,
-    "kos": 2,
-    "hits": 5,
-    "score": 930,
+    "kos": 3,
+    "hits": 6,
+    "score": 1290,
     "fish": 0,
     "pct": 0,
     "collisions": 0,
@@ -172,7 +172,7 @@
    "name": "Sky Brawl results screen",
    "ok": true,
    "info": {
-    "title": "Out in 9th place"
+    "title": "Out in 8th place"
    }
   },
   {
@@ -282,7 +282,7 @@
    "birds": 4000,
    "falling": 1,
    "lost": 4,
-   "fps": 58,
+   "fps": 60,
    "result": {
     "grade": "D",
     "pct": 7.623354946834275,
@@ -315,7 +315,7 @@
    "birds": 4000,
    "falling": 0,
    "lost": 1,
-   "fps": 58,
+   "fps": 60,
    "result": {
     "grade": "D",
     "pct": 7.623354946834275,
@@ -348,7 +348,7 @@
    "birds": 4000,
    "falling": 0,
    "lost": 11,
-   "fps": 57,
+   "fps": 58,
    "result": {
     "grade": "D",
     "pct": 24.06553804773361,
@@ -365,7 +365,7 @@
    "calls": 7,
    "tris": 325990
   },
-  "fps": "{\"mode\":\"play\",\"t\":3.65,\"diff\":\"calm\",\"pathPct\":100,\"q\":1,\"dist\":0.6,\"collisions\":0,\"dunks\":0,\"fish\":0,\"fishSpawned\":0,\"fishMissed\":0,\"score\":91,\"birds\":4000,\"falling\":0,\"lost\":0,\"fps\":60,\"result\":{\"grade\":\"D\",\"pct\":24.06553804773361,\"collisions\":11,\"dunks\":7,\"fish\":19,\"score\":5687},\"draw\":{\"near\":484,\"mid\":3516,\"far\":0},\"calls\":22,\"tris\":952096}",
+  "fps": "{\"mode\":\"play\",\"t\":3.65,\"diff\":\"calm\",\"pathPct\":100,\"q\":1,\"dist\":0.6,\"collisions\":0,\"dunks\":0,\"fish\":0,\"fishSpawned\":0,\"fishMissed\":0,\"score\":91,\"birds\":4000,\"falling\":0,\"lost\":0,\"fps\":60,\"result\":{\"grade\":\"D\",\"pct\":24.06553804773361,\"collisions\":11,\"dunks\":7,\"fish\":19,\"score\":5687},\"draw\":{\"near\":486,\"mid\":3514,\"far\":0},\"calls\":22,\"tris\":954512}",
   "frenzy": {
    "mode": "end",
    "t": 90.01,
@@ -374,30 +374,30 @@
    "q": 0,
    "dist": 0.6,
    "collisions": 2,
-   "dunks": 3,
-   "fish": 15,
-   "fishSpawned": 184,
-   "fishMissed": 161,
-   "score": 3350,
+   "dunks": 12,
+   "fish": 17,
+   "fishSpawned": 181,
+   "fishMissed": 150,
+   "score": 2750,
    "birds": 4000,
-   "falling": 0,
-   "lost": 2,
+   "falling": 1,
+   "lost": 1,
    "fps": 60,
    "result": {
     "grade": "C",
     "pct": 0,
     "collisions": 2,
-    "dunks": 3,
-    "fish": 15,
-    "score": 3350
+    "dunks": 12,
+    "fish": 17,
+    "score": 2750
    },
    "draw": {
-    "near": 877,
-    "mid": 3121,
+    "near": 252,
+    "mid": 3747,
     "far": 0
    },
-   "calls": 14,
-   "tris": 1385936
+   "calls": 37,
+   "tris": 631534
   },
   "brawl40": {
    "mode": "play",
@@ -420,9 +420,9 @@
     "grade": "C",
     "pct": 0,
     "collisions": 2,
-    "dunks": 3,
-    "fish": 15,
-    "score": 3350
+    "dunks": 12,
+    "fish": 17,
+    "score": 2750
    },
    "draw": {
     "near": 0,
@@ -438,7 +438,7 @@
   },
   "brawl": {
    "mode": "end",
-   "t": 73.62,
+   "t": 112.46,
    "diff": "flock",
    "pathPct": null,
    "q": 0,
@@ -446,20 +446,20 @@
    "collisions": 0,
    "dunks": 0,
    "fish": 0,
-   "fishSpawned": 27,
-   "fishMissed": 25,
-   "score": 930,
+   "fishSpawned": 35,
+   "fishMissed": 34,
+   "score": 1290,
    "birds": 4000,
    "falling": 0,
    "lost": 0,
    "fps": 58,
    "result": {
     "grade": "C",
-    "place": 9,
+    "place": 8,
     "won": false,
-    "kos": 2,
-    "hits": 5,
-    "score": 930,
+    "kos": 3,
+    "hits": 6,
+    "score": 1290,
     "fish": 0,
     "pct": 0,
     "collisions": 0,
@@ -470,8 +470,8 @@
     "mid": 0,
     "far": 0
    },
-   "calls": 9,
-   "tris": 109692
+   "calls": 7,
+   "tris": 107800
   }
  }
 }
