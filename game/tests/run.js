@@ -37,7 +37,7 @@ const check = (name, ok, info) => { checks.push({ name, ok: !!ok, info }); conso
     check('idle player grades poorly (< 70 %)', r.pathPct < 70, { pathPct: r.pathPct, grade: r.result && r.result.grade });
 
     // ram bot: collisions and falling birds
-    r = JSON.parse(await s.evalp(`game.input.override = null; game.start({seed: 22, diff: 'flock', skipIntro: true}); game.bot('ram'); JSON.stringify(game.advance(14))`));
+    r = JSON.parse(await s.evalp(`game.input.override = null; game.start({seed: 23, diff: 'flock', skipIntro: true}); game.bot('ram'); JSON.stringify(game.advance(14))`));
     out.ram = r;
     check('ram bot collides', r.collisions >= 3, { collisions: r.collisions });
     check('hit birds fall (falling or already in the sea)', r.falling + r.lost >= 1, { falling: r.falling, lost: r.lost });
