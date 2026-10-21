@@ -1,0 +1,64 @@
+{
+ "format": "murm-vat-1",
+ "name": "starling_sil",
+ "lod": 2,
+ "verts": 46,
+ "tris": 58,
+ "rows": 34,
+ "cycleFrames": 32,
+ "rowGlide": 32,
+ "rowBound": 33,
+ "wingbeatHz": 13.3,
+ "downstroke": 0.57,
+ "spanM": 0.39,
+ "lengthM": 0.205,
+ "frame": "glTF +Z head, +Y back, +X left wing, metres",
+ "bbox": [
+  -0.19383,
+  -0.10007,
+  -0.09042,
+  0.19383,
+  0.16195,
+  0.10655
+ ],
+ "buffers": {
+  "index": {
+   "offset": 0,
+   "count": 174
+  },
+  "uv": {
+   "offset": 348,
+   "count": 92
+  },
+  "vatPos": {
+   "offset": 716,
+   "count": 6256
+  },
+  "vatNrm": {
+   "offset": 13228,
+   "count": 6256
+  }
+ },
+ "textures": {
+  "albedo": null,
+  "mask": null,
+  "normal": null
+ },
+ "albedoLinear": {
+  "body": [
+   0.1256,
+   0.0942,
+   0.0727
+  ],
+  "wing": [
+   0.0901,
+   0.0681,
+   0.0525
+  ]
+ },
+ "measured": {
+  "spanGlideM": 0.3877,
+  "lengthGlideM": 0.188
+ },
+ "source": "blender/s8_vat.py from models/blend/s5_rigged.blend (2026-10-21 14:16)"
+}

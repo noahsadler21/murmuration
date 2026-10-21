@@ -8,6 +8,7 @@ import { WING, matchPhases, bodyAt } from './wings.js';
 import { World, Spray, Rings, Feathers, makeEnv, sharedUniforms, LOOK } from './fx.js';
 import { FishSchool } from './fish.js';
 import { Sound } from './audio.js';
+import { loadHero } from './hero.js';
 import { Brawl, BRAWL } from './brawl.js';
 import { Lobby } from './net.js';
 import { leaderboardOn, topScores, postScore, cleanName } from './leaderboard.js';
@@ -97,7 +98,7 @@ const hoops = [];
     hoops.push({ mesh, m });
   }
 }
-let lods = null, hero = null, ghost = null;
+let lods = null, hero = null, ghost = null, heroGLB = null;
 let assets = null;
 
 function resize() {
@@ -184,8 +185,14 @@ function newWorld(run, seed) {
 // ------------------------------------------------------------------------------------------------ loading
 async function boot() {
   resize();
-  const base = new URL('../assets/birds/', location.href).href;
-  assets = await loadStarlings(base, (k) => { $('loadbar').style.width = Math.round(k * 100) + '%'; });
+  // the game's own copy of the birds (the new v5 starling) first; the main site's birds if that is missing
+  let base = new URL('assets/birds/', location.href).href;
+  try { assets = await loadStarlings(base, (k) => { $('loadbar').style.width = Math.round(k * 90) + '%'; }); }
+  catch (e) { base = new URL('../assets/birds/', location.href).href; assets = await loadStarlings(base, (k) => { $('loadbar').style.width = Math.round(k * 90) + '%'; }); }
+  // the player's feathered bird; without it the VAT hero below stands in
+  try { heroGLB = await loadHero(base + 'starling_hero.glb', env); scene.add(heroGLB.root); heroGLB.root.visible = false; }
+  catch (e) { console.warn('hero bird: using the VAT starling (' + e.message + ')'); heroGLB = null; }
+  $('loadbar').style.width = '100%';
   const shared = U;
   lods = {
     near: new VatLOD(assets.retro, { max: N_BIRDS, defines: { TEXTURED: 1 }, shared, dark: 0.42 }),
@@ -199,7 +206,7 @@ async function boot() {
   WING.body = bodyCurve(assets.retro.meta);
   hero = new VatLOD(assets.real, { max: 1, defines: { TEXTURED: 1, NORMALMAP: 1, SMOOTH_NRM: 1, IRID: 1, GLOSS: 1 }, shared, dark: 0.85 });
   // shutter: about a 180° shutter at 60 fps is 1/120 s, a ninth of a 13.3 Hz wingbeat; six samples across it
-  hero.addBlur(scene, [-0.055, -0.035, -0.015, 0.015, 0.035, 0.055], 0.2);
+  hero.addBlur(scene, [-0.055, -0.035, -0.015, 0.015, 0.035, 0.055], 0.15);
   lods.near.addBlur(scene, [-0.045, 0.045], 0.32);
   ghost = new VatLOD(assets.real, { max: 1, defines: { GHOST: 1, SMOOTH_NRM: 1 }, shared, transparent: true, renderOrder: 9 });
   ghost.uniforms.uGhost.value.copy(LOOK.accent);
@@ -587,7 +594,10 @@ function frame(dtReal) {
     const pu = 0.087 * P.glide + 0.05 * P.bound + bd.pitch * fl;
     const hl = Math.hypot(P.fx, P.fy + pu, P.fz);
     quatFromFwdRoll(qtmp, P.fx / hl, (P.fy + pu) / hl, P.fz / hl, P.roll);
-    if (!(G.gameMode === 'brawl' && brawl.on && brawl.player.dead)) hero.push(P.x + P.fx * bd.surge * fl, P.y + P.sinkY + bd.heave * fl, P.z + P.fz * bd.surge * fl, 1, qtmp, P.phase, P.glide, P.bound);
+    const showHero = !(G.gameMode === 'brawl' && brawl.on && brawl.player.dead);
+    const hx = P.x + P.fx * bd.surge * fl, hy = P.y + P.sinkY + bd.heave * fl, hz = P.z + P.fz * bd.surge * fl;
+    if (showHero) hero.push(hx, hy, hz, 1, qtmp, P.phase, P.glide, P.bound);
+    if (heroGLB) { heroGLB.root.visible = showHero; if (showHero) heroGLB.update(hx, hy, hz, qtmp, P.phase, P.glide + P.bound, dtReal); }
     const off = G.mode === 'play' && G.dist !== undefined ? G.dist : 0;
     const camD = camera.position.distanceTo(_v.set(tmpS.x, tmpS.y, tmpS.z));
     const ga = G.mode === 'play' && G.gameMode === 'murm' ? smooth(0.9, 2.2, off) * smooth(1.2, 2.6, camD) * 0.6 : 0;
@@ -599,6 +609,8 @@ function frame(dtReal) {
     if (G.gameMode === 'murm') updateGuide(t, off); else { guide.pts.visible = false; for (const h of hoops) h.mesh.visible = false; }
   } else { guide.pts.visible = false; for (const h of hoops) h.mesh.visible = false; }
   hero.end(); ghost.end();
+  // with the feathered bird loaded, the VAT hero only lends its wing-blur copies
+  if (heroGLB) { hero.mesh.visible = false; if (G.mode === 'title' || G.mode === 'end') heroGLB.root.visible = false; }
 }
 
 function grade(dt, S, D) {
@@ -1217,7 +1229,7 @@ $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) pause
 // ------------------------------------------------------------------------------------------------ test / debug API
 window.game = {
   G, DIFF, get SLOT() { return SLOT; }, get SWEEPS() { return SWEEPS; }, get RUN_T() { return RUN_T; }, fishes, input, camera, scene, renderer, get lods() { return lods; }, get hero() { return hero; }, get ghost() { return ghost; },
-  brawl, net, stickCurve,
+  brawl, net, stickCurve, get heroGLB() { return heroGLB; },
   start: (o) => startRun(o),
   bot: (m) => { G.bot = m || null; if (!m) input.override = null; },
   // advance the simulation in fixed steps without waiting for frames (headless tests)
