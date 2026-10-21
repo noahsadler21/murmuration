@@ -5,6 +5,15 @@ const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const wrapPi = (a) => { a = (a + Math.PI) % (2 * Math.PI); if (a < 0) a += 2 * Math.PI; return a - Math.PI; };
 const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
 
+// Stick response. Sensitivity shapes the middle of the throw (lower = gentler small corrections) but never the end
+// of it, so a full push always gives a full turn. Pushing past the full-turn ring (mouse or touch), or holding a
+// direction key, ramps a hard turn on top (0..1).
+export const STICK = { mouseR: 0.3, touchR: 0.16, hardSpan: 0.75, keyHardAfter: 0.3, keyHardRamp: 0.35 };
+export function stickCurve(l, sens) {
+  const e = 1 + (1.2 - clamp(sens, 0.3, 1.2)) * 1.4;      // 1 at 120 %, 2.26 at 30 %
+  return Math.pow(clamp(l, 0, 1), e);
+}
+
 export class Input {
   constructor(el) {
     this.el = el;
@@ -16,7 +25,8 @@ export class Input {
     this.mouseSteer = true;
     this.sens = 0.8;               // steering sensitivity (settings): scales how far the stick turns the bird
     this.override = null;          // tests / bot: {sx, sy, boost, brake}
-    this.raw = { sx: 0, sy: 0, boost: false, brake: false, src: 'none' };
+    this.raw = { sx: 0, sy: 0, hard: 0, boost: false, brake: false, src: 'none' };
+    this.keyHold = 0; this._kt = performance.now();
     const kd = (e) => {
       if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
       const k = e.code;
@@ -50,7 +60,8 @@ export class Input {
   }
   get touching() { return this.touch.id !== null; }
   read() {
-    if (this.override) { const o = this.override; this.raw = { sx: o.sx || 0, sy: o.sy || 0, boost: !!o.boost, brake: !!o.brake, src: 'bot' }; return this.raw; }
+    if (this.override) { const o = this.override; this.raw = { sx: o.sx || 0, sy: o.sy || 0, hard: o.hard || 0, boost: !!o.boost, brake: !!o.brake, src: 'bot' }; return this.raw; }
+    const now = performance.now(), kdt = Math.min(0.1, (now - this._kt) / 1000); this._kt = now;
     const K = this.keys;
     let kx = 0, ky = 0;
     if (K.has('KeyA') || K.has('ArrowLeft')) kx -= 1;
@@ -62,21 +73,26 @@ export class Input {
     let sx = 0, sy = 0, src = 'none';
     const W = window.innerWidth, H = window.innerHeight, m = Math.min(W, H);
     if (this.touching) {
-      sx = (this.touch.x - this.touch.x0) / (0.16 * m); sy = -(this.touch.y - this.touch.y0) / (0.16 * m); src = 'touch';
+      sx = (this.touch.x - this.touch.x0) / (STICK.touchR * m); sy = -(this.touch.y - this.touch.y0) / (STICK.touchR * m); src = 'touch';
     } else if (kx || ky) {
       sx = kx; sy = ky; src = 'keys';
     } else if (this.mouseSteer && this.mouse.active) {
-      sx = (this.mouse.x - W / 2) / (0.3 * m); sy = -(this.mouse.y - H * 0.5) / (0.3 * m); src = 'mouse';
+      sx = (this.mouse.x - W / 2) / (STICK.mouseR * m); sy = -(this.mouse.y - H * 0.5) / (STICK.mouseR * m); src = 'mouse';
     }
     const l = Math.hypot(sx, sy);
+    let hard = 0;
+    if (src === 'mouse' || src === 'touch') hard = clamp((l - 1) / STICK.hardSpan, 0, 1);
+    this.keyHold = src === 'keys' && kx ? this.keyHold + kdt : 0;
+    if (src === 'keys') hard = clamp((this.keyHold - STICK.keyHardAfter) / STICK.keyHardRamp, 0, 1);
     if (l > 1) { sx /= l; sy /= l; }
-    if (src === 'mouse' || src === 'touch') {
-      const dz = 0.07, k = l < dz ? 0 : (Math.min(l, 1) - dz) / (1 - dz) / Math.max(l, 1e-6);
-      sx *= k; sy *= k;
+    if (src !== 'none' && l > 1e-6) {
+      // dead zone for pointers, then the sensitivity curve on the magnitude (direction kept)
+      const dz = src === 'keys' ? 0 : 0.07;
+      const lm = Math.min(l, 1), lc = lm < dz ? 0 : stickCurve((lm - dz) / (1 - dz), this.sens);
+      sx *= lc / lm; sy *= lc / lm;
     }
     if (this.invertY && src !== 'none') sy = -sy;
-    sx *= this.sens; sy *= this.sens;
-    this.raw = { sx, sy, boost: !!boost, brake: !!brake, src };
+    this.raw = { sx, sy, hard, boost: !!boost, brake: !!brake, src };
     return this.raw;
   }
 }
@@ -112,15 +128,17 @@ export class Player {
     const ax = Math.abs(this.sx), ay = Math.abs(this.sy);
     const flowYaw = Math.atan2(flow.fx, flow.fz), flowPitch = Math.asin(clamp(flow.fy, -1, 1));
     const A = cfg.assist;
-    const maxYR = 1.9;
+    const hard = inp.hard || 0;
+    this.hard = (this.hard || 0) + (hard - (this.hard || 0)) * (1 - Math.exp(-dt / 0.08));
+    const maxYR = 1.9 + 1.7 * this.hard;
     // stick right turns right: right is −yaw (yaw grows toward the bird's left)
     let yrCmd = -Math.sign(this.sx) * Math.pow(ax, 1.25) * maxYR;
     yrCmd += A * (1 - ax) * clamp(wrapPi(flowYaw - this.yaw) * 2.6, -maxYR, maxYR);
-    this.yawRate += (yrCmd - this.yawRate) * (1 - Math.exp(-dt / 0.13));
+    this.yawRate += (yrCmd - this.yawRate) * (1 - Math.exp(-dt / (0.13 - 0.06 * this.hard)));
     this.yaw += this.yawRate * dt + this.kick * dt;
     this.kick *= Math.exp(-dt * 4);
-    let pCmd = this.sy * 0.78 + A * (1 - ay) * flowPitch;
-    pCmd = clamp(pCmd, -1.0, 0.85);
+    let pCmd = this.sy * (0.78 + 0.3 * this.hard) + A * (1 - ay) * flowPitch;
+    pCmd = clamp(pCmd, -1.1, 0.95);
     this.pitch += (pCmd - this.pitch) * (1 - Math.exp(-dt / 0.2));
     this._dir();
     // speed
@@ -130,7 +148,7 @@ export class Player {
     if (boostOn) this.energy = Math.max(0, this.energy - dt * 0.38); else this.energy = Math.min(1, this.energy + dt * 0.16);
     const pace = cfg.pace * clamp(-alongErr * 0.9, -3.5, 3.5);
     const vT = slotSpeed + pace + this.boosting * 6.5 - this.braking * 5;
-    this.speed += -G * Math.sin(this.pitch) * 0.45 * dt;
+    this.speed += -G * Math.sin(this.pitch) * 0.45 * dt - this.hard * Math.abs(this.yawRate) * 0.6 * dt;
     this.speed += (vT - this.speed) * (1 - Math.exp(-dt / 0.8));
     this.speed = clamp(this.speed, 5, 26);
     // gusts (storm difficulty): a slowly wandering lateral push
@@ -149,7 +167,7 @@ export class Player {
     if (this.y > 140) { this.y = 140; this.pitch = Math.min(this.pitch, 0); }
     this.invuln = Math.max(0, this.invuln - dt);
     // visual roll: a coordinated turn (bank = atan(v·ω/g)), right turn = right wing down = + roll
-    const rollT = clamp(-Math.atan(this.speed * this.yawRate / G), -1.25, 1.25);
+    const rollT = clamp(-Math.atan(this.speed * this.yawRate / G), -1.4, 1.4);
     this.roll += (rollT - this.roll) * (1 - Math.exp(-dt / 0.12));
     // wings: the same flap / glide / bound bursts as the flock; boost keeps the wings beating, a steep dive folds
     // them into a stoop, and a hard turn or climb means more beats between rests

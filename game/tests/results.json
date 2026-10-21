@@ -1,5 +1,5 @@
 {
- "when": "2026-10-21T04:42:19.126Z",
+ "when": "2026-10-21T05:04:22.483Z",
  "checks": [
   {
    "name": "title screen shows",
@@ -99,7 +99,7 @@
    "ok": true,
    "info": {
     "yaw0": 2.8368706736864984,
-    "yaw1": 1.8505517290144256
+    "yaw1": 1.4630928081490895
    }
   },
   {
@@ -123,32 +123,32 @@
    "name": "Fish Frenzy runs 90 s and ends",
    "ok": true,
    "info": {
-    "t": 90.01
+    "t": 90
    }
   },
   {
    "name": "Fish Frenzy: lots of fish leap and the bot catches some",
    "ok": true,
    "info": {
-    "leapt": 172,
-    "caught": 13,
-    "grade": "C"
+    "leapt": 204,
+    "caught": 20,
+    "grade": "B"
    }
   },
   {
    "name": "Fish Frenzy results screen",
    "ok": true,
    "info": {
-    "pct": "13 of 172"
+    "pct": "20 of 204"
    }
   },
   {
    "name": "Sky Brawl: birds get knocked out",
    "ok": true,
    "info": {
-    "out": 2,
+    "out": 1,
     "alive": 10,
-    "playerHp": 2,
+    "playerHp": 0,
     "playerKOs": 0
    }
   },
@@ -156,15 +156,15 @@
    "name": "Sky Brawl ends with a placing",
    "ok": true,
    "info": {
-    "grade": "A",
-    "place": 3,
+    "grade": "D",
+    "place": 11,
     "won": false,
-    "kos": 3,
-    "hits": 6,
-    "score": 1690,
+    "kos": 0,
+    "hits": 0,
+    "score": 60,
     "fish": 0,
     "pct": 0,
-    "collisions": 4,
+    "collisions": 0,
     "dunks": 0
    }
   },
@@ -172,14 +172,24 @@
    "name": "Sky Brawl results screen",
    "ok": true,
    "info": {
-    "title": "Out in 3rd place"
+    "title": "Out in 11th place"
    }
   },
   {
-   "name": "steering sensitivity scales the turn",
+   "name": "low sensitivity softens small moves but keeps the full turn",
    "ok": true,
    "info": {
-    "sx": 0.5
+    "lowMid": 0.23004691265621877,
+    "highMid": 0.5,
+    "lowFull": 1
+   }
+  },
+  {
+   "name": "a hard push turns much sharper",
+   "ok": true,
+   "info": {
+    "normal": 1.8979702859069891,
+    "hard": 3.5999150706832417
    }
   },
   {
@@ -355,113 +365,117 @@
    "calls": 6,
    "tris": 326104
   },
-  "fps": "{\"mode\":\"play\",\"t\":3.62,\"diff\":\"calm\",\"pathPct\":100,\"q\":1,\"dist\":0.6,\"collisions\":0,\"dunks\":0,\"fish\":0,\"fishSpawned\":0,\"fishMissed\":0,\"score\":90,\"birds\":4000,\"falling\":0,\"lost\":0,\"fps\":60,\"result\":{\"grade\":\"D\",\"pct\":25.33578975285815,\"collisions\":9,\"dunks\":7,\"fish\":18,\"score\":5975},\"draw\":{\"near\":485,\"mid\":3515,\"far\":0},\"calls\":20,\"tris\":925224}",
+  "fps": "{\"mode\":\"play\",\"t\":3.65,\"diff\":\"calm\",\"pathPct\":100,\"q\":1,\"dist\":0.6,\"collisions\":0,\"dunks\":0,\"fish\":0,\"fishSpawned\":0,\"fishMissed\":0,\"score\":91,\"birds\":4000,\"falling\":0,\"lost\":0,\"fps\":60,\"result\":{\"grade\":\"D\",\"pct\":25.33578975285815,\"collisions\":9,\"dunks\":7,\"fish\":18,\"score\":5975},\"draw\":{\"near\":485,\"mid\":3515,\"far\":0},\"calls\":20,\"tris\":925224}",
   "frenzy": {
    "mode": "end",
-   "t": 90.01,
-   "diff": "flock",
-   "pathPct": null,
-   "q": 0.586,
-   "dist": 0.6,
-   "collisions": 0,
-   "dunks": 11,
-   "fish": 13,
-   "fishSpawned": 172,
-   "fishMissed": 142,
-   "score": 1800,
-   "birds": 4000,
-   "falling": 0,
-   "lost": 0,
-   "fps": 60,
-   "result": {
-    "grade": "C",
-    "pct": 0,
-    "collisions": 0,
-    "dunks": 11,
-    "fish": 13,
-    "score": 1800
-   },
-   "draw": {
-    "near": 0,
-    "mid": 4000,
-    "far": 0
-   },
-   "calls": 18,
-   "tris": 326650
-  },
-  "brawl40": {
-   "mode": "play",
-   "t": 39.5,
-   "diff": "flock",
-   "pathPct": null,
-   "q": 0.667,
-   "dist": 0.6,
-   "collisions": 1,
-   "dunks": 0,
-   "fish": 0,
-   "fishSpawned": 20,
-   "fishMissed": 15,
-   "score": 125,
-   "birds": 4000,
-   "falling": 0,
-   "lost": 1,
-   "fps": 57,
-   "result": {
-    "grade": "C",
-    "pct": 0,
-    "collisions": 0,
-    "dunks": 11,
-    "fish": 13,
-    "score": 1800
-   },
-   "draw": {
-    "near": 0,
-    "mid": 2990,
-    "far": 1009
-   },
-   "calls": 17,
-   "tris": 309532,
-   "alive": 10,
-   "out": 2,
-   "hp": 2,
-   "kos": 0
-  },
-  "brawl": {
-   "mode": "end",
-   "t": 165.36,
+   "t": 90,
    "diff": "flock",
    "pathPct": null,
    "q": 0,
    "dist": 0.6,
-   "collisions": 4,
-   "dunks": 0,
-   "fish": 0,
-   "fishSpawned": 62,
-   "fishMissed": 62,
-   "score": 1690,
+   "collisions": 7,
+   "dunks": 10,
+   "fish": 20,
+   "fishSpawned": 204,
+   "fishMissed": 171,
+   "score": 4725,
    "birds": 4000,
    "falling": 0,
-   "lost": 4,
-   "fps": 57,
+   "lost": 7,
+   "fps": 60,
    "result": {
-    "grade": "A",
-    "place": 3,
+    "grade": "B",
+    "pct": 0,
+    "collisions": 7,
+    "dunks": 10,
+    "fish": 20,
+    "score": 4725
+   },
+   "draw": {
+    "near": 0,
+    "mid": 2739,
+    "far": 1254
+   },
+   "calls": 34,
+   "tris": 268700
+  },
+  "brawl40": {
+   "mode": "end",
+   "t": 38.67,
+   "diff": "flock",
+   "pathPct": null,
+   "q": 0,
+   "dist": 0.6,
+   "collisions": 0,
+   "dunks": 0,
+   "fish": 0,
+   "fishSpawned": 19,
+   "fishMissed": 17,
+   "score": 60,
+   "birds": 4000,
+   "falling": 0,
+   "lost": 0,
+   "fps": 58,
+   "result": {
+    "grade": "D",
+    "place": 11,
     "won": false,
-    "kos": 3,
-    "hits": 6,
-    "score": 1690,
+    "kos": 0,
+    "hits": 0,
+    "score": 60,
     "fish": 0,
     "pct": 0,
-    "collisions": 4,
+    "collisions": 0,
     "dunks": 0
    },
    "draw": {
     "near": 0,
-    "mid": 3996,
+    "mid": 0,
     "far": 0
    },
-   "calls": 9,
-   "tris": 330490
+   "calls": 8,
+   "tris": 111962,
+   "alive": 10,
+   "out": 1,
+   "hp": 0,
+   "kos": 0
+  },
+  "brawl": {
+   "mode": "end",
+   "t": 38.69,
+   "diff": "flock",
+   "pathPct": null,
+   "q": 0,
+   "dist": 0.6,
+   "collisions": 0,
+   "dunks": 0,
+   "fish": 0,
+   "fishSpawned": 19,
+   "fishMissed": 17,
+   "score": 60,
+   "birds": 4000,
+   "falling": 0,
+   "lost": 0,
+   "fps": 58,
+   "result": {
+    "grade": "D",
+    "place": 11,
+    "won": false,
+    "kos": 0,
+    "hits": 0,
+    "score": 60,
+    "fish": 0,
+    "pct": 0,
+    "collisions": 0,
+    "dunks": 0
+   },
+   "draw": {
+    "near": 0,
+    "mid": 0,
+    "far": 0
+   },
+   "calls": 8,
+   "tris": 111950
   }
  }
 }

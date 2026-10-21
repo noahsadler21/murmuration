@@ -35,8 +35,12 @@ winner. If the host leaves, the match ends. Some networks (strict firewalls, som
 direct connections; joining then fails with a message.
 
 Knocking a neighbour out of the sky scores points in every game (+75; +25 for flock birds in Sky Brawl, where rivals
-are worth +50 a hit and +250 a knockout). The **Steering** slider on the start screen sets how hard the stick turns
-the bird (30-120 %, 80 % by default).
+are worth +50 a hit and +250 a knockout). The **Steering** slider on the start screen shapes small corrections (lower
+is gentler, 30-120 %, 80 % by default) without limiting the full turn. Push the mouse or your finger past the dashed
+ring (or hold a turn key) for a **hard turn**: nearly twice the turn rate, at the cost of a little speed.
+
+Sky Brawl has no murmuration around it, only the fighters; every rival out of view gets an arrow on the screen edge
+with its name and distance.
 
 Flights: **Calm** (strong flocking instinct, wide tube), **Flock**, **Storm** (gusts, tight tube, slow neighbours).
 

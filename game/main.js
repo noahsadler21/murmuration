@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { loadStarlings, VatLOD, quatFromFwdRoll, bodyCurve } from './birds.js';
 import { Path, Flock, mulberry32 } from './flock.js';
-import { Input, Player } from './player.js';
+import { Input, Player, STICK, stickCurve } from './player.js';
 import { WING, matchPhases, bodyAt } from './wings.js';
 import { World, Spray, Rings, Feathers, makeEnv, sharedUniforms, LOOK } from './fx.js';
 import { FishSchool } from './fish.js';
@@ -566,7 +566,10 @@ function frame(dtReal) {
 
   // flock
   const playerForFlock = G.mode === 'play' ? P : (G.mode === 'intro' ? { ...P, invuln: 1 } : null);
-  F.update(t, dt, playerForFlock, camera.position, lods, { onHit, onSplash: (x, z, s) => { rings.ring(x, z, 1.4, 1.3, 0.5); spray.splash(x, z, s, G.R); sound.splash(0.4); } });
+  // Sky Brawl is just the fighters over the sea: the murmuration sits that one out
+  const noFlock = G.gameMode === 'brawl' && G.mode !== 'title';
+  if (noFlock) { for (const L of [lods.near, lods.mid, lods.far]) { L.begin(); L.end(); } }
+  else F.update(t, dt, playerForFlock, camera.position, lods, { onHit, onSplash: (x, z, s) => { rings.ring(x, z, 1.4, 1.3, 0.5); spray.splash(x, z, s, G.R); sound.splash(0.4); } });
   fishes.update(dt, t, G.mode === 'play' ? P : null, D.catchR, onCatch, G.R);
   spray.update(dt); down.update(dt); rings.update(dt); feathers.update(dt);
   brawl.render(t);
@@ -937,16 +940,22 @@ function drawOverlay() {
   }
   // steering feedback: mouse reticle relative to the dead zone, or the touch stick
   if (input.raw.src === 'mouse' && G.mode === 'play') {
+    const m = Math.min(w, h), R1 = STICK.mouseR * m, hard = input.raw.hard;
     octx.globalAlpha = 0.5; octx.strokeStyle = '#1d1e20'; octx.lineWidth = 1;
-    octx.beginPath(); octx.arc(w / 2, h / 2, 0.07 * 0.3 * Math.min(w, h), 0, Math.PI * 2); octx.stroke();
-    octx.globalAlpha = 0.8;
-    octx.beginPath(); octx.arc(input.mouse.x, input.mouse.y, 5, 0, Math.PI * 2); octx.stroke();
+    octx.beginPath(); octx.arc(w / 2, h / 2, 0.07 * R1, 0, Math.PI * 2); octx.stroke();
+    // full turn ring; beyond it the hard-turn zone, lit as you push into it
+    octx.globalAlpha = 0.16 + 0.3 * hard; octx.setLineDash([4, 6]);
+    octx.beginPath(); octx.arc(w / 2, h / 2, R1, 0, Math.PI * 2); octx.stroke(); octx.setLineDash([]);
+    octx.globalAlpha = 0.8; octx.strokeStyle = hard > 0.05 ? acc : '#1d1e20'; octx.lineWidth = 1 + 1.5 * hard;
+    octx.beginPath(); octx.arc(input.mouse.x, input.mouse.y, 5 + 3 * hard, 0, Math.PI * 2); octx.stroke();
   } else if (input.touching) {
-    const T = input.touch, R = 0.16 * Math.min(w, h);
+    const T = input.touch, R = STICK.touchR * Math.min(w, h), hard = input.raw.hard, RH = R * (1 + STICK.hardSpan);
     octx.globalAlpha = 0.35; octx.strokeStyle = '#1d1e20'; octx.lineWidth = 1.5;
     octx.beginPath(); octx.arc(T.x0, T.y0, R, 0, Math.PI * 2); octx.stroke();
-    octx.globalAlpha = 0.6; octx.fillStyle = '#1d1e20';
-    const dx = T.x - T.x0, dy = T.y - T.y0, l = Math.hypot(dx, dy), m = l > R ? R / l : 1;
+    octx.globalAlpha = 0.15 + 0.35 * hard; octx.setLineDash([4, 6]); octx.strokeStyle = hard > 0.05 ? acc : '#1d1e20';
+    octx.beginPath(); octx.arc(T.x0, T.y0, RH, 0, Math.PI * 2); octx.stroke(); octx.setLineDash([]);
+    octx.globalAlpha = 0.6; octx.fillStyle = hard > 0.05 ? acc : '#1d1e20';
+    const dx = T.x - T.x0, dy = T.y - T.y0, l = Math.hypot(dx, dy), m = l > RH ? RH / l : 1;
     octx.beginPath(); octx.arc(T.x0 + dx * m, T.y0 + dy * m, 14, 0, Math.PI * 2); octx.fill();
   }
   octx.restore();
@@ -954,22 +963,60 @@ function drawOverlay() {
 
 // rival markers: a small caret above each bird in view, with its feathers left
 function drawRivals(w, h, k, acc) {
+  octx.font = '600 11px system-ui, sans-serif'; octx.textAlign = 'center'; octx.textBaseline = 'alphabetic';
+  const labels = [];
   for (const b of brawl.birds) {
     if (b.state !== 'fly') continue;
     const d = camera.position.distanceTo(_w.set(b.x, b.y, b.z));
-    if (d > 140) continue;
     const v = _v.set(b.x, b.y + 0.35, b.z).project(camera);
-    if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) continue;
+    const inView = v.z < 1 && Math.abs(v.x) < 0.96 && Math.abs(v.y) < 0.92;
+    if (!inView) { edgeArrow(b, v, d, w, h, acc, labels); continue; }
     const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h - 6;
-    octx.globalAlpha = clamp(1.3 - d / 120, 0.35, 1);
+    octx.globalAlpha = clamp(1.3 - d / 160, 0.55, 1);
     octx.fillStyle = acc;
     octx.beginPath(); octx.moveTo(sx - 5, sy - 7); octx.lineTo(sx + 5, sy - 7); octx.lineTo(sx, sy); octx.closePath(); octx.fill();
     for (let i = 0; i < BRAWL.hp; i++) {
       octx.beginPath(); octx.arc(sx - 6 + i * 6, sy - 12, 2, 0, Math.PI * 2);
       if (i < b.hp) octx.fill(); else { octx.strokeStyle = acc; octx.lineWidth = 1; octx.stroke(); }
     }
-    if (d < 40) { octx.font = '11px system-ui, sans-serif'; octx.textAlign = 'center'; octx.fillStyle = '#1d1e20'; octx.fillText(b.name, sx, sy - 18); }
+    labels.push({ x: sx, y: sy - 18, text: d < 60 ? b.name : `${b.name} ${Math.round(d)} m`, d });
   }
+  // labels, nearest first; one that would overlap a placed one steps down a line (or is dropped after four tries)
+  labels.sort((a, b) => a.d - b.d);
+  const placed = [];
+  octx.fillStyle = '#1d1e20';
+  for (const L of labels) {
+    const wd = octx.measureText(L.text).width + 6;
+    let y = L.y, ok = false;
+    for (let k = 0; k < 4 && !ok; k++) {
+      ok = !placed.some((p) => Math.abs(p.x - L.x) < (p.w + wd) / 2 && Math.abs(p.y - y) < 13);
+      if (!ok) y += 13;
+    }
+    if (!ok) continue;
+    placed.push({ x: L.x, y, w: wd });
+    octx.globalAlpha = clamp(1.25 - L.d / 160, 0.55, 1);
+    octx.fillText(L.text, L.x, y);
+  }
+  octx.globalAlpha = 1;
+}
+// a bird off screen: an arrow on the screen edge pointing at it, with its name and distance (nearer = bolder)
+function edgeArrow(b, v, d, w, h, acc, labels) {
+  let x = v.x, y = v.y;
+  if (v.z > 1) { x = -x; y = -y; }                         // behind the camera: the projection is mirrored
+  if (Math.abs(x) < 1e-3 && Math.abs(y) < 1e-3) y = -1;
+  const mx = 0.92, my = 0.84, s = Math.max(Math.abs(x) / mx, Math.abs(y) / my);
+  x /= s; y /= s;
+  const sx = (x * 0.5 + 0.5) * w, sy = (-y * 0.5 + 0.5) * h, a = Math.atan2(-y, x);
+  const near = clamp(1 - d / 150, 0, 1);
+  octx.globalAlpha = 0.5 + 0.5 * near;
+  octx.save(); octx.translate(sx, sy); octx.rotate(a);
+  octx.fillStyle = acc;
+  const L = 9 + 5 * near;
+  octx.beginPath(); octx.moveTo(L, 0); octx.lineTo(-L * 0.6, -L * 0.62); octx.lineTo(-L * 0.25, 0); octx.lineTo(-L * 0.6, L * 0.62); octx.closePath(); octx.fill();
+  octx.restore();
+  // label on the inside of the arrow, kept on screen
+  const lx = clamp(sx - Math.cos(a) * 26, 34, w - 34), ly = clamp(sy + Math.sin(a) * 18 + 4, 16, h - 8);
+  labels.push({ x: lx, y: ly, text: `${b.name} ${Math.round(d)} m`, d });
   octx.globalAlpha = 1;
 }
 
@@ -1170,7 +1217,7 @@ $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) pause
 // ------------------------------------------------------------------------------------------------ test / debug API
 window.game = {
   G, DIFF, get SLOT() { return SLOT; }, get SWEEPS() { return SWEEPS; }, get RUN_T() { return RUN_T; }, fishes, input, camera, scene, renderer, get lods() { return lods; }, get hero() { return hero; }, get ghost() { return ghost; },
-  brawl, net,
+  brawl, net, stickCurve,
   start: (o) => startRun(o),
   bot: (m) => { G.bot = m || null; if (!m) input.override = null; },
   // advance the simulation in fixed steps without waiting for frames (headless tests)

@@ -94,8 +94,14 @@ const check = (name, ok, info) => { checks.push({ name, ok: !!ok, info }); conso
     check('Sky Brawl ends with a placing', r.mode === 'end' && r.result && r.result.place >= 1, r.result);
     check('Sky Brawl results screen', await s.evalp(`/place|flying/.test(document.getElementById('rTitle').textContent)`), { title: await s.evalp(`document.getElementById('rTitle').textContent`) });
     // steering sensitivity scales the stick
-    const sens = await s.evalp(`(() => { game.input.override = null; game.bot(null); game.input.sens = 0.5; game.input.keys.add('ArrowRight'); const a = game.input.read().sx; game.input.keys.delete('ArrowRight'); game.input.sens = 0.8; return a; })()`);
-    check('steering sensitivity scales the turn', Math.abs(sens - 0.5) < 1e-6, { sx: sens });
+    const sens = JSON.parse(await s.evalp(`JSON.stringify({ lowMid: game.stickCurve(0.5, 0.4), highMid: game.stickCurve(0.5, 1.2), lowFull: game.stickCurve(1, 0.4) })`));
+    check('low sensitivity softens small moves but keeps the full turn', sens.lowMid < sens.highMid && Math.abs(sens.lowFull - 1) < 1e-9, sens);
+    // pushing past the ring gives a hard turn: a sharper turn rate than a full normal push
+    const turn = JSON.parse(await s.evalp(`(() => {
+      const rate = (hard) => { game.start({ seed: 40, mode: 'brawl', diff: 'flock', skipIntro: true }); game.bot(null);
+        game.input.override = { sx: 1, sy: 0, hard }; game.advance(1); const r = Math.abs(game.G.player.yawRate); game.input.override = null; return r; };
+      return JSON.stringify({ normal: rate(0), hard: rate(1) }); })()`));
+    check('a hard push turns much sharper', turn.hard > turn.normal * 1.5, turn);
     await s.evalp(`game.G.gameMode = 'murm'; 1`);
 
     // asset contract read defensively: a future rebake with variants and fewer keys still yields a usable layout
