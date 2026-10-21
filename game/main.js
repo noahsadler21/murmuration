@@ -9,6 +9,7 @@ import { World, Spray, Rings, Feathers, makeEnv, sharedUniforms, LOOK } from './
 import { FishSchool } from './fish.js';
 import { Sound } from './audio.js';
 import { Brawl, BRAWL } from './brawl.js';
+import { Lobby } from './net.js';
 import { leaderboardOn, topScores, postScore, cleanName } from './leaderboard.js';
 import * as SH from './shaders.js';
 
@@ -259,7 +260,18 @@ function startRun(opts = {}) {
   $('count').classList.toggle('hidden', introLen <= 0);
   renderTimeline();
   if (G.gameMode === 'fish' && introLen <= 0) G.nextFish = 0.5;
-  if (G.gameMode === 'brawl') { brawl.start(seed, G.player, G.diffKey, G.R); G.nextFish = 4; } else brawl.stop();
+  if (G.gameMode === 'brawl') {
+    const on = opts.net || { role: 'solo' };
+    if (on.role === 'client' && on.spawn) {
+      // a guest starts where the host placed it, facing into the arena
+      const [x, y, z, yaw] = on.spawn;
+      G.player.reset(x, y, z, yaw, 0, 13);
+    }
+    brawl.start(seed, G.player, G.diffKey, G.R, { ...on, myName: on.myName || cleanName($('netName').value) || 'You' });
+    G.nextFish = 4;
+    if (on.role === 'host') net.lobby.broadcast({ k: 'start', seed, diff: G.diffKey, cx: brawl.cx, cz: brawl.cz, spawns: brawl.spawns, intro: G.introLen });
+  } else brawl.stop();
+  G.online = G.gameMode === 'brawl' && opts.net && opts.net.role !== 'solo' ? opts.net.role : null;
 }
 
 function endRun() {
@@ -572,7 +584,7 @@ function frame(dtReal) {
     const pu = 0.087 * P.glide + 0.05 * P.bound + bd.pitch * fl;
     const hl = Math.hypot(P.fx, P.fy + pu, P.fz);
     quatFromFwdRoll(qtmp, P.fx / hl, (P.fy + pu) / hl, P.fz / hl, P.roll);
-    hero.push(P.x + P.fx * bd.surge * fl, P.y + P.sinkY + bd.heave * fl, P.z + P.fz * bd.surge * fl, 1, qtmp, P.phase, P.glide, P.bound);
+    if (!(G.gameMode === 'brawl' && brawl.on && brawl.player.dead)) hero.push(P.x + P.fx * bd.surge * fl, P.y + P.sinkY + bd.heave * fl, P.z + P.fz * bd.surge * fl, 1, qtmp, P.phase, P.glide, P.bound);
     const off = G.mode === 'play' && G.dist !== undefined ? G.dist : 0;
     const camD = camera.position.distanceTo(_v.set(tmpS.x, tmpS.y, tmpS.z));
     const ga = G.mode === 'play' && G.gameMode === 'murm' ? smooth(0.9, 2.2, off) * smooth(1.2, 2.6, camD) * 0.6 : 0;
@@ -639,7 +651,10 @@ function onCatch(f) {
   G.fish++;
   const pts = 100 * G.combo;
   G.score += pts;
-  if (G.gameMode === 'brawl' && brawl.player.hp < BRAWL.hp && !brawl.player.dead) { brawl.player.hp++; toast('A fish: one feather back', 'fish', 1.4); }
+  if (G.gameMode === 'brawl' && brawl.player.hp < BRAWL.hp && !brawl.player.dead) {
+    if (G.online === 'client') net.lobby.send({ k: 'heal' }); else brawl.player.hp++;
+    toast('A fish: one feather back', 'fish', 1.4);
+  }
   sound.fish(G.combo);
   for (let k = 0; k < 14; k++) {
     const a = G.R() * 6.283, b = G.R() * 2 - 1, s = 1 + G.R() * 2;
@@ -669,7 +684,11 @@ const brawlHooks = {
     G.shake = 0.5; G.flash = 1; G.slowT = 0.09;
     floatText('−1 feather', P.x, P.y + 0.4, P.z, 'bad');
   },
-  onPlayerOut: (by) => { toast(by && by.name ? `${by.name} knocked you out` : 'You are out', 'warn', 2); G.endAt = G.t + 1.6; },
+  onPlayerOut: (by) => {
+    toast(by && by.name ? `${by.name} knocked you out` : 'You are out', 'warn', 2);
+    if (G.online === 'host') toast('You are hosting: the match goes on until one bird is left', 'info', 3);
+    else G.endAt = G.t + 1.6;
+  },
 };
 let ringWarn = 0;
 function brawlTick(dt, t) {
@@ -680,6 +699,8 @@ function brawlTick(dt, t) {
   const out = Math.hypot(G.player.x - brawl.cx, G.player.z - brawl.cz) > brawl.radius(t);
   if (out && t > ringWarn) { toast('Outside the ring: get back in before you lose a feather', 'warn', 1.8); ringWarn = t + 4; }
   if (brawl.winner === 'player' && G.endAt === null) { toast('Last bird flying!', 'fish', 2.4); G.endAt = t + 2; }
+  else if (brawl.winner === 'rival' && G.endAt === null && G.online) { G.endAt = t + 2; }
+  netTick(dt);
 }
 // Fish Frenzy flight: no pull toward a place in the flock, a light flocking instinct so a centred stick flies on with
 // the birds, and the same gusts as the chosen flight
@@ -1000,6 +1021,93 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
+// ------------------------------------------------------------------------------------------------ online lobbies
+const net = { lobby: new Lobby(), sendT: 0 };
+function netTick(dt) {
+  if (!G.online) return;
+  net.sendT -= dt;
+  if (net.sendT > 0) return;
+  const P = G.player;
+  if (G.online === 'host') { net.sendT = 1 / 15; net.lobby.broadcast(brawl.snapshot(P)); }
+  else {
+    net.sendT = 1 / 20;
+    const r = (v) => +v.toFixed(3);
+    net.lobby.send({ k: 's', x: r(P.x), y: r(P.y), z: r(P.z), vx: r(P.vx), vy: r(P.vy), vz: r(P.vz), fx: r(P.fx), fy: r(P.fy), fz: r(P.fz), r: r(P.roll), p: r(P.phase), g: r(P.glide), b: r(P.bound) });
+  }
+}
+net.lobby.onMessage = (from, m) => {
+  if (!m) return;
+  if (net.lobby.role === 'host') {
+    if (m.k === 's') brawl.setRemote(from, m);
+    else if (m.k === 'heal') brawl.heal(from);
+    else if (m.k === 'left' && brawl.on) brawl.leave(from);
+  } else {
+    if (m.k === 'start') {
+      G.gameMode = 'brawl'; G.diffKey = m.diff;
+      startRun({ seed: m.seed, mode: 'brawl', diff: m.diff, skipIntro: !(m.intro > 0),
+        net: { role: 'client', myId: net.lobby.myId, myName: cleanName($('netName').value) || 'Guest', cx: m.cx, cz: m.cz, spawn: m.spawns[net.lobby.myId] } });
+    } else if (m.k === 'w' && G.online === 'client') {
+      brawl.applySnapshot(m, brawlHooks, performance.now() / 1000);
+      // follow the host's clock (the flock, the ring and the countdown are all timed from it)
+      const lag = m.t - G.t;
+      if (Math.abs(lag) > 0.5) G.t = m.t; else G.t += lag * 0.1;
+    }
+  }
+};
+net.lobby.onPlayers = (list) => {
+  const ol = $('netPlayers'); ol.innerHTML = '';
+  for (const p of list) { const li = document.createElement('li'); li.textContent = p.name + (p.id === 'host' ? ' (host)' : '') + (p.id === net.lobby.myId ? ' (you)' : ''); ol.appendChild(li); }
+  $('netStart').classList.toggle('hidden', net.lobby.role !== 'host');
+  $('netMsg').textContent = net.lobby.role === 'host'
+    ? `${list.length} in the lobby. Share the code; start when everyone is in (empty seats get rival birds).`
+    : 'Waiting for the host to start the match.';
+};
+net.lobby.onClose = (reason) => {
+  document.body.dataset.online = '0';
+  $('netLobby').classList.add('hidden');
+  $('netMsg').textContent = reason ? `Lobby closed: ${reason}.` : 'Left the lobby.';
+  if (G.online && (G.mode === 'play' || G.mode === 'intro')) { toast(reason || 'Disconnected', 'warn', 2.5); G.endAt = G.t + 0.5; }
+  G.online = null;
+};
+net.lobby.onError = (msg) => { $('netMsg').textContent = 'Connection problem: ' + msg; };
+function netName() {
+  const n = cleanName($('netName').value) || store.get('name', '');
+  if (!n) { $('netMsg').textContent = 'Type your name first.'; $('netName').focus(); return null; }
+  $('netName').value = n; store.set('name', n);
+  return n;
+}
+function netOpen(code) {
+  document.body.dataset.online = '1';
+  $('netLobby').classList.remove('hidden');
+  $('netCodeShow').textContent = code;
+}
+$('netName').value = store.get('name', '');
+$('netCreate').addEventListener('click', async () => {
+  const name = netName(); if (!name) return;
+  $('netMsg').textContent = 'Opening a lobby…';
+  try { const code = await net.lobby.host(name); netOpen(code); net.lobby.onPlayers(net.lobby.players); }
+  catch (e) { $('netMsg').textContent = 'Could not open a lobby: ' + e.message + '. Check your connection.'; }
+});
+$('netJoin').addEventListener('click', async () => {
+  const name = netName(); if (!name) return;
+  $('netMsg').textContent = 'Joining…';
+  try { const code = await net.lobby.join($('netCode').value, name); netOpen(code); }
+  catch (e) { net.lobby.close(); $('netMsg').textContent = 'Could not join: ' + e.message + '. Some networks block direct connections; try another network.'; }
+});
+$('netCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('netJoin').click(); });
+$('netLeave').addEventListener('click', () => net.lobby.close());
+$('netCopy').addEventListener('click', () => {
+  const c = net.lobby.code;
+  navigator.clipboard?.writeText(c).then(() => { $('netMsg').textContent = `Copied ${c}.`; }, () => { $('netMsg').textContent = `Code: ${c}`; });
+});
+$('netStart').addEventListener('click', () => {
+  if (net.lobby.role !== 'host') return;
+  G.gameMode = 'brawl'; syncModeButtons();
+  const humans = net.lobby.players.filter((p) => p.id !== 'host');
+  // online matches skip the countdown: every bird starts at its own seat in the arena
+  startRun({ mode: 'brawl', skipIntro: true, net: { role: 'host', myId: 'host', myName: net.lobby.players[0].name, humans } });
+});
+
 // ------------------------------------------------------------------------------------------------ UI wiring
 function pauseToggle(force) {
   if (G.mode === 'play' && force !== false) { setMode('paused'); }
@@ -1019,6 +1127,8 @@ function bestText() {
 }
 function syncModeButtons() {
   document.querySelectorAll('[data-game]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.game === G.gameMode)));
+  $('online').classList.toggle('hidden', G.gameMode !== 'brawl');
+  if (G.gameMode !== 'brawl' && net.lobby.role) net.lobby.close();
   $('modeLine').textContent = G.gameMode === 'fish'
     ? 'Fish Frenzy: the flock skims the sea for 90 seconds and flying fish leap all around. Catch as many as you can; quick catches chain.'
     : G.gameMode === 'brawl'
@@ -1030,7 +1140,10 @@ document.querySelectorAll('[data-game]').forEach((b) => b.addEventListener('clic
 syncModeButtons();
 $('birdCount').textContent = N_BIRDS.toLocaleString();
 $('fly').addEventListener('click', () => startRun());
-$('again').addEventListener('click', () => startRun());
+$('again').addEventListener('click', () => {
+  if (net.lobby.role) { G.online = null; brawl.stop(); newWorld(false, (Math.random() * 1e9) | 0); G.t = 0; camState.init = false; setMode('title'); return; }
+  startRun();
+});
 $('menu').addEventListener('click', () => { newWorld(false, (Math.random() * 1e9) | 0); G.t = 0; camState.init = false; G.nextWave = 0; G.nextFish = 0; setMode('title'); });
 $('resume').addEventListener('click', () => pauseToggle(false));
 $('quit').addEventListener('click', () => { newWorld(false, (Math.random() * 1e9) | 0); G.t = 0; camState.init = false; G.nextWave = 0; G.nextFish = 0; setMode('title'); });
@@ -1057,7 +1170,7 @@ $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) pause
 // ------------------------------------------------------------------------------------------------ test / debug API
 window.game = {
   G, DIFF, get SLOT() { return SLOT; }, get SWEEPS() { return SWEEPS; }, get RUN_T() { return RUN_T; }, fishes, input, camera, scene, renderer, get lods() { return lods; }, get hero() { return hero; }, get ghost() { return ghost; },
-  brawl,
+  brawl, net,
   start: (o) => startRun(o),
   bot: (m) => { G.bot = m || null; if (!m) input.override = null; },
   // advance the simulation in fixed steps without waiting for frames (headless tests)

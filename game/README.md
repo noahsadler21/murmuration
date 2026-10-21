@@ -27,6 +27,13 @@ bird faster than it is flying into you and it loses a feather; at none it tumble
 three minutes and costs a feather every few seconds outside it. Catching a flying fish grows a feather back. Last
 bird flying wins; the grade comes from your placing.
 
+**Online Sky Brawl.** Pick Sky Brawl, type a name and press **Create lobby**: you get a five-letter code. Friends pick
+Sky Brawl, type the code and press **Join** (up to 8 people); the host presses **Start match** and rival birds fill the
+empty seats. It runs peer to peer over WebRTC (PeerJS, using its free public broker only to find each other), with
+the host's browser refereeing: guests fly their own birds and the host decides hits, knockouts, the ring and the
+winner. If the host leaves, the match ends. Some networks (strict firewalls, some campus or mobile networks) block
+direct connections; joining then fails with a message.
+
 Knocking a neighbour out of the sky scores points in every game (+75; +25 for flock birds in Sky Brawl, where rivals
 are worth +50 a hit and +250 a knockout). The **Steering** slider on the start screen sets how hard the stick turns
 the bird (30-120 %, 80 % by default).
@@ -85,7 +92,7 @@ node game/tests/run.js
 loads the page in headless Chrome/Edge and plays scripted runs: a bot that follows the guide (high in-line %), no
 input (poor grade), a bot that rams its neighbours (collisions, falling birds), a fish-diving bot, real keyboard
 events, the countdown and the HUD. Results go to `game/tests/results.json`, screenshots to `captures/`.
-`node game/tests/look.js` saves a look sheet, `node game/tests/hero.js` a close-up of your bird's wingbeat, `node game/tests/frenzy.js` a Fish Frenzy sheet; `node game/tests/shot.js "<query>" out.png "<js>"` one screenshot.
+`node game/tests/look.js` saves a look sheet, `node game/tests/hero.js` a close-up of your bird's wingbeat, `node game/tests/frenzy.js` a Fish Frenzy sheet, `node game/tests/online.js` an online lobby between two browsers; `node game/tests/shot.js "<query>" out.png "<js>"` one screenshot.
 
 ## How it works
 

@@ -5,6 +5,11 @@
 // A ring closes in over the run; outside it a bird loses a feather every few seconds. Last bird flying wins.
 // Rivals are simple hunters: they pick a nearby bird (you a little more often), lead it, boost in close, break off
 // when hurt and chased, and head back inside the ring when it catches them.
+//
+// Online (net.js): the host's game runs every rule above. Guests fly their own birds and stream them to the host,
+// which treats them as remote birds (no AI, dead-reckoned between messages), fills the empty seats with rivals, and
+// sends back a snapshot of every bird, feathers, the ring and the hits and knockouts of the last moment. A guest's
+// game only mirrors that snapshot (role 'client') and follows its own feathers from it.
 import * as THREE from 'three';
 import { quatFromFwdRoll } from './birds.js';
 import { newWing, stepWing } from './wings.js';
@@ -46,25 +51,35 @@ export class Brawl {
     this._q = [0, 0, 0, 1];
   }
 
-  start(seed, player, diff, R) {
+  // net: { role: 'solo' | 'host' | 'client', myId, myName, humans: [{id, name}] (host: the guests), cx, cz (client) }
+  start(seed, player, diff, R, net = { role: 'solo' }) {
     this.on = true;
     this.R = R;
-    this.cx = player.x; this.cz = player.z;
+    this.role = net.role || 'solo';
+    this.myId = net.myId || 'host'; this.myName = net.myName || 'You';
+    this.cx = net.cx ?? player.x; this.cz = net.cz ?? player.z;
     this.t = 0;
+    this.ev = []; this.spawns = {};
     this.skill = diff === 'calm' ? 0.65 : diff === 'storm' ? 1.05 : 0.85;
     const names = [...NAMES].sort(() => R() - 0.5);
     this.birds = [];
-    for (let i = 0; i < BRAWL.rivals; i++) {
+    const humans = this.role === 'host' ? (net.humans || []).slice(0, BRAWL.rivals) : [];
+    const seats = this.role === 'client' ? 0 : BRAWL.rivals;
+    for (let i = 0; i < seats; i++) {
       const a = (i / BRAWL.rivals) * Math.PI * 2 + R() * 0.4, d = 35 + R() * 60;
       const x = this.cx + Math.cos(a) * d, z = this.cz + Math.sin(a) * d;
-      this.birds.push({
-        name: names[i % names.length], x, y: 10 + R() * 14, z, yaw: a + Math.PI + (R() - 0.5), pitch: 0, speed: 13, yawRate: 0,
+      const h = humans[i];
+      const b = {
+        id: h ? h.id : 'b' + i, remote: !!h,
+        name: h ? h.name : names[i % names.length], x, y: 10 + R() * 14, z, yaw: a + Math.PI + (R() - 0.5), pitch: 0, speed: 13, yawRate: 0,
         vx: 0, vy: 0, vz: 0, fx: 0, fy: 0, fz: 1, roll: 0, energy: 1, boosting: 0,
         hp: BRAWL.hp, invuln: 0, out: 0, state: 'fly', target: null, retarget: 0, flee: 0,
-        skill: this.skill * (0.8 + 0.4 * R()), wing: newWing(R), fall: null, kos: 0, place: 0,
-      });
+        skill: this.skill * (0.8 + 0.4 * R()), wing: newWing(R), fall: null, kos: 0, place: 0, hits: 0,
+      };
+      if (h) this.spawns[h.id] = [x, b.y, z, b.yaw];
+      this.birds.push(b);
     }
-    this.player = { hp: BRAWL.hp, invuln: 0, out: 0, kos: 0, hits: 0, dead: false };
+    this.player = { hp: BRAWL.hp, invuln: 0, out: 0, kos: 0, hits: 0, dead: false, place: 0 };
     this.placeNext = BRAWL.rivals + 1;
     this.ring.visible = true;
     this.winner = null;
@@ -103,6 +118,7 @@ export class Brawl {
   // hooks: { onHit(attacker, victim, x, y, z), onKO(victim, byPlayer), onPlayerHit(), onPlayerOut(), seaH(x, z) }
   update(dt, t, P, hooks) {
     if (!this.on || dt <= 0) return;
+    if (this.role === 'client') return this._mirror(dt, t);
     this.t = t;
     const R = this.R, rad = this.radius(t);
     const me = this.player;
@@ -116,6 +132,15 @@ export class Brawl {
       if (b.state === 'fall') { this._fall(b, dt, hooks); continue; }
       if (b.state !== 'fly') continue;
       b.invuln = Math.max(0, b.invuln - dt);
+      if (b.remote) {
+        // a guest's bird: carried forward on its last velocity until its next message
+        b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+        if (Math.hypot(b.x - this.cx, b.z - this.cz) > rad) {
+          b.out += dt;
+          if (b.out > BRAWL.outsideEvery) { b.out = 0; this._damage(b, null, hooks); }
+        } else b.out = 0;
+        continue;
+      }
       b.retarget -= dt; b.flee = Math.max(0, b.flee - dt);
       const dc = Math.hypot(b.x - this.cx, b.z - this.cz);
       let ax, ay, az, boost = false;
@@ -182,8 +207,8 @@ export class Brawl {
 
     if (!this.winner) {
       const left = this.alive();
-      if (me.dead) this.winner = 'rival';
-      else if (left === 1) this.winner = 'player';
+      if (me.dead && this.role !== 'host') this.winner = 'rival';
+      else if (left <= 1) this.winner = me.dead ? 'rival' : 'player';
     }
   }
 
@@ -192,7 +217,9 @@ export class Brawl {
     b.hp--; b.invuln = BRAWL.invuln;
     b.yawRate += (this.R() - 0.5) * 3; b.speed *= 0.8;
     const byPlayer = !!(by && by.player);
-    if (byPlayer) this.player.hits++;
+    if (byPlayer) this.player.hits++; else if (by && by.ref && by.ref.hits !== undefined) by.ref.hits++;
+    const byId = by ? (by.player ? this.myId : by.ref.id) : null;
+    this.ev.push({ v: b.id, by: byId, x: +x.toFixed(2), y: +y.toFixed(2), z: +z.toFixed(2), ko: b.hp <= 0 ? 1 : 0 });
     if (hooks.onHit) hooks.onHit(by ? by.ref : null, b, x, y, z, byPlayer);
     if (b.hp <= 0) {
       b.state = 'fall'; b.place = this.placeNext--;
@@ -200,6 +227,7 @@ export class Brawl {
       let ax = R() - 0.5, ay = R() - 0.5, az = R() - 0.5; const al = Math.hypot(ax, ay, az) || 1;
       b.fall = { vx: b.vx * 0.6, vy: b.vy * 0.6 + 2, vz: b.vz * 0.6, wx: ax / al * sp, wy: ay / al * sp, wz: az / al * sp, q: quatFromFwdRoll([0, 0, 0, 1], b.fx, b.fy, b.fz, b.roll), ph: 0 };
       if (byPlayer) this.player.kos++; else if (by && by.ref && by.ref.kos !== undefined) by.ref.kos++;
+      if (b.remote) b.fall.remote = true;
       if (hooks.onKO) hooks.onKO(b, byPlayer);
     }
   }
@@ -207,8 +235,89 @@ export class Brawl {
     const me = this.player;
     if (me.invuln > 0 || me.dead) return;
     me.hp--; me.invuln = BRAWL.invuln;
+    this.ev.push({ v: this.myId, by: by ? by.id : null, x: +x.toFixed(2), y: +y.toFixed(2), z: +z.toFixed(2), ko: me.hp <= 0 ? 1 : 0 });
+    if (by && by.hits !== undefined) by.hits++;
     if (hooks.onPlayerHit) hooks.onPlayerHit(by, x, y, z);
-    if (me.hp <= 0) { me.dead = true; me.place = this.placeNext--; if (hooks.onPlayerOut) hooks.onPlayerOut(by); }
+    if (me.hp <= 0) { me.dead = true; me.place = this.placeNext--; if (by && by.kos !== undefined) by.kos++; if (hooks.onPlayerOut) hooks.onPlayerOut(by); }
+  }
+
+  // ---------------------------------------------------------------------------------------- online
+  // host: a guest's latest flight state
+  setRemote(id, s) {
+    const b = this.birds.find((x) => x.id === id);
+    if (!b || b.state !== 'fly') return;
+    b.x = s.x; b.y = s.y; b.z = s.z; b.vx = s.vx; b.vy = s.vy; b.vz = s.vz;
+    b.fx = s.fx; b.fy = s.fy; b.fz = s.fz; b.roll = s.r;
+    b.wing.p = s.p; b.wing.gw = s.g; b.wing.bw = s.b; b.wing.sinkY = 0;
+  }
+  heal(id) { const b = this.birds.find((x) => x.id === id); if (b && b.state === 'fly') b.hp = Math.min(BRAWL.hp, b.hp + 1); }
+  leave(id) { const b = this.birds.find((x) => x.id === id); if (b && b.state === 'fly') { b.state = 'gone'; b.place = this.placeNext--; } }
+
+  // host: everything a guest needs to draw and follow the match
+  snapshot(P) {
+    const S = { fly: 0, fall: 1, gone: 2 };
+    const row = (id, name, st, b, hp, place, kos, wing, q) => {
+      const r = [id, name, st, +b.x.toFixed(2), +b.y.toFixed(2), +b.z.toFixed(2), +b.vx.toFixed(2), +b.vy.toFixed(2), +b.vz.toFixed(2),
+        +b.fx.toFixed(3), +b.fy.toFixed(3), +b.fz.toFixed(3), +(b.roll || 0).toFixed(3), +wing.p.toFixed(3), +wing.gw.toFixed(2), +wing.bw.toFixed(2), hp, place, kos];
+      if (q) r.push(...q.map((v) => +v.toFixed(3)));
+      return r;
+    };
+    const me = this.player;
+    const rows = [row(this.myId, this.myName, me.dead ? 2 : 0, P, me.hp, me.place, me.kos, { p: P.phase, gw: P.glide, bw: P.bound })];
+    for (const b of this.birds) rows.push(row(b.id, b.name, S[b.state], b, b.hp, b.place, b.kos, b.state === 'fall' ? { p: b.fall.ph, gw: 0, bw: 0.5 } : b.wing, b.state === 'fall' ? b.fall.q : null));
+    let win = null;
+    if (this.winner === 'player') win = this.myId;
+    else if (this.alive() === 1) { const last = this.birds.find((b) => b.state === 'fly'); win = last ? last.id : null; }
+    const ev = this.ev; this.ev = [];
+    return { k: 'w', t: +this.t.toFixed(3), cx: this.cx, cz: this.cz, b: rows, ev, win };
+  }
+
+  // guest: take the host's snapshot (hooks as in update: onHit, onKO, onPlayerHit, onPlayerOut)
+  applySnapshot(m, hooks, now) {
+    this.t = m.t; this.cx = m.cx; this.cz = m.cz;
+    const me = this.player, seen = new Set();
+    for (const r of m.b) {
+      const [id, name, st] = r;
+      if (id === this.myId) {
+        me.hp = r[16]; me.place = r[17]; me.kos = r[18];
+        if ((st !== 0 || me.hp <= 0) && !me.dead) { me.dead = true; if (hooks.onPlayerOut) hooks.onPlayerOut(null); }
+        continue;
+      }
+      seen.add(id);
+      let b = this.birds.find((x) => x.id === id);
+      if (!b) {
+        b = { id, name, state: 'fly', x: r[3], y: r[4], z: r[5], vx: 0, vy: 0, vz: 0, fx: 0, fy: 0, fz: 1, roll: 0, hp: BRAWL.hp, invuln: 0,
+          wing: { p: 0, gw: 0, bw: 0, sinkY: 0 }, fall: null, kos: 0, place: 0, tgt: [r[3], r[4], r[5]], recv: now };
+        this.birds.push(b);
+      }
+      b.name = name;
+      b.state = st === 0 ? 'fly' : st === 1 ? 'fall' : 'gone';
+      b.tgt = [r[3], r[4], r[5]]; b.recv = now;
+      b.vx = r[6]; b.vy = r[7]; b.vz = r[8]; b.fx = r[9]; b.fy = r[10]; b.fz = r[11]; b.roll = r[12];
+      b.wing.p = r[13]; b.wing.gw = r[14]; b.wing.bw = r[15];
+      b.hp = r[16]; b.place = r[17]; b.kos = r[18];
+      if (b.state === 'fall') b.fall = { q: r.slice(19, 23), ph: r[13] };
+    }
+    for (const b of this.birds) if (!seen.has(b.id)) b.state = 'gone';
+    for (const e of m.ev || []) {
+      const victim = e.v === this.myId ? null : this.birds.find((x) => x.id === e.v);
+      const byMe = e.by === this.myId;
+      if (!victim) { if (hooks.onPlayerHit) hooks.onPlayerHit(this.birds.find((x) => x.id === e.by), e.x, e.y, e.z); continue; }
+      if (byMe) me.hits++;
+      if (hooks.onHit) hooks.onHit(null, victim, e.x, e.y, e.z, byMe);
+      if (e.ko && hooks.onKO) hooks.onKO(victim, byMe);
+    }
+    if (m.win) this.winner = m.win === this.myId ? 'player' : 'rival';
+  }
+  _mirror(dt, t) {
+    const k = 1 - Math.exp(-dt / 0.09), now = performance.now() / 1000;
+    for (const b of this.birds) {
+      if (b.state === 'gone' || !b.tgt) continue;
+      const age = Math.min(0.4, now - b.recv);
+      const tx = b.tgt[0] + b.vx * age, ty = b.tgt[1] + b.vy * age, tz = b.tgt[2] + b.vz * age;
+      b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+      b.x += (tx - b.x) * k; b.y += (ty - b.y) * k; b.z += (tz - b.z) * k;
+    }
   }
   _fall(b, dt, hooks) {
     const F = b.fall;

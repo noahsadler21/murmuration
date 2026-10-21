@@ -1,5 +1,5 @@
 {
- "when": "2026-10-21T04:33:34.864Z",
+ "when": "2026-10-21T04:42:19.126Z",
  "checks": [
   {
    "name": "title screen shows",
@@ -99,7 +99,7 @@
    "ok": true,
    "info": {
     "yaw0": 2.8368706736864984,
-    "yaw1": 1.7330359008500995
+    "yaw1": 1.8505517290144256
    }
   },
   {
@@ -123,15 +123,15 @@
    "name": "Fish Frenzy runs 90 s and ends",
    "ok": true,
    "info": {
-    "t": 90
+    "t": 90.01
    }
   },
   {
    "name": "Fish Frenzy: lots of fish leap and the bot catches some",
    "ok": true,
    "info": {
-    "leapt": 174,
-    "caught": 19,
+    "leapt": 172,
+    "caught": 13,
     "grade": "C"
    }
   },
@@ -139,7 +139,7 @@
    "name": "Fish Frenzy results screen",
    "ok": true,
    "info": {
-    "pct": "19 of 174"
+    "pct": "13 of 172"
    }
   },
   {
@@ -156,15 +156,15 @@
    "name": "Sky Brawl ends with a placing",
    "ok": true,
    "info": {
-    "grade": "B",
-    "place": 6,
+    "grade": "A",
+    "place": 3,
     "won": false,
     "kos": 3,
-    "hits": 5,
-    "score": 1385,
+    "hits": 6,
+    "score": 1690,
     "fish": 0,
     "pct": 0,
-    "collisions": 1,
+    "collisions": 4,
     "dunks": 0
    }
   },
@@ -172,7 +172,7 @@
    "name": "Sky Brawl results screen",
    "ok": true,
    "info": {
-    "title": "Out in 6th place"
+    "title": "Out in 3rd place"
    }
   },
   {
@@ -355,39 +355,39 @@
    "calls": 6,
    "tris": 326104
   },
-  "fps": "{\"mode\":\"play\",\"t\":3.72,\"diff\":\"calm\",\"pathPct\":100,\"q\":1,\"dist\":0.61,\"collisions\":0,\"dunks\":0,\"fish\":0,\"fishSpawned\":0,\"fishMissed\":0,\"score\":93,\"birds\":4000,\"falling\":0,\"lost\":0,\"fps\":59,\"result\":{\"grade\":\"D\",\"pct\":25.33578975285815,\"collisions\":9,\"dunks\":7,\"fish\":18,\"score\":5975},\"draw\":{\"near\":486,\"mid\":3514,\"far\":0},\"calls\":20,\"tris\":926432}",
+  "fps": "{\"mode\":\"play\",\"t\":3.62,\"diff\":\"calm\",\"pathPct\":100,\"q\":1,\"dist\":0.6,\"collisions\":0,\"dunks\":0,\"fish\":0,\"fishSpawned\":0,\"fishMissed\":0,\"score\":90,\"birds\":4000,\"falling\":0,\"lost\":0,\"fps\":60,\"result\":{\"grade\":\"D\",\"pct\":25.33578975285815,\"collisions\":9,\"dunks\":7,\"fish\":18,\"score\":5975},\"draw\":{\"near\":485,\"mid\":3515,\"far\":0},\"calls\":20,\"tris\":925224}",
   "frenzy": {
    "mode": "end",
-   "t": 90,
+   "t": 90.01,
    "diff": "flock",
    "pathPct": null,
-   "q": 0.985,
-   "dist": 0.61,
-   "collisions": 5,
-   "dunks": 10,
-   "fish": 19,
-   "fishSpawned": 174,
-   "fishMissed": 149,
-   "score": 3675,
+   "q": 0.586,
+   "dist": 0.6,
+   "collisions": 0,
+   "dunks": 11,
+   "fish": 13,
+   "fishSpawned": 172,
+   "fishMissed": 142,
+   "score": 1800,
    "birds": 4000,
    "falling": 0,
-   "lost": 5,
-   "fps": 59,
+   "lost": 0,
+   "fps": 60,
    "result": {
     "grade": "C",
     "pct": 0,
-    "collisions": 5,
-    "dunks": 10,
-    "fish": 19,
-    "score": 3675
+    "collisions": 0,
+    "dunks": 11,
+    "fish": 13,
+    "score": 1800
    },
    "draw": {
     "near": 0,
-    "mid": 3995,
+    "mid": 4000,
     "far": 0
    },
-   "calls": 10,
-   "tris": 326344
+   "calls": 18,
+   "tris": 326650
   },
   "brawl40": {
    "mode": "play",
@@ -395,7 +395,7 @@
    "diff": "flock",
    "pathPct": null,
    "q": 0.667,
-   "dist": 0.61,
+   "dist": 0.6,
    "collisions": 1,
    "dunks": 0,
    "fish": 0,
@@ -405,14 +405,14 @@
    "birds": 4000,
    "falling": 0,
    "lost": 1,
-   "fps": 56,
+   "fps": 57,
    "result": {
     "grade": "C",
     "pct": 0,
-    "collisions": 5,
-    "dunks": 10,
-    "fish": 19,
-    "score": 3675
+    "collisions": 0,
+    "dunks": 11,
+    "fish": 13,
+    "score": 1800
    },
    "draw": {
     "near": 0,
@@ -428,40 +428,40 @@
   },
   "brawl": {
    "mode": "end",
-   "t": 118.43,
+   "t": 165.36,
    "diff": "flock",
    "pathPct": null,
    "q": 0,
-   "dist": 0.61,
-   "collisions": 1,
+   "dist": 0.6,
+   "collisions": 4,
    "dunks": 0,
    "fish": 0,
-   "fishSpawned": 47,
-   "fishMissed": 45,
-   "score": 1385,
+   "fishSpawned": 62,
+   "fishMissed": 62,
+   "score": 1690,
    "birds": 4000,
    "falling": 0,
-   "lost": 1,
-   "fps": 56,
+   "lost": 4,
+   "fps": 57,
    "result": {
-    "grade": "B",
-    "place": 6,
+    "grade": "A",
+    "place": 3,
     "won": false,
     "kos": 3,
-    "hits": 5,
-    "score": 1385,
+    "hits": 6,
+    "score": 1690,
     "fish": 0,
     "pct": 0,
-    "collisions": 1,
+    "collisions": 4,
     "dunks": 0
    },
    "draw": {
     "near": 0,
-    "mid": 1710,
-    "far": 2289
+    "mid": 3996,
+    "far": 0
    },
-   "calls": 11,
-   "tris": 230916
+   "calls": 9,
+   "tris": 330490
   }
  }
 }
