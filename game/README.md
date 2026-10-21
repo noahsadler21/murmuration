@@ -24,6 +24,34 @@ chain (×2, ×3, ...); a splashdown or a collision breaks the chain. It is grade
 
 Flights: **Calm** (strong flocking instinct, wide tube), **Flock**, **Storm** (gusts, tight tube, slow neighbours).
 
+## Leaderboard
+
+The results screen can show a shared top 10 for each game and flight, stored in a free Supabase project. It is
+hidden until `game/leaderboard-config.js` holds the project URL and its public anon key. To set it up:
+
+1. Create a free project at supabase.com.
+2. In the SQL editor, run:
+   ```sql
+   create table scores (
+     id bigint generated always as identity primary key,
+     created_at timestamptz default now(),
+     name text not null check (char_length(name) between 1 and 16),
+     mode text not null check (mode in ('murm', 'fish')),
+     diff text not null check (diff in ('calm', 'flock', 'storm')),
+     score int not null check (score between 1 and 60000),
+     fish int not null default 0 check (fish between 0 and 400),
+     pct int not null default 0 check (pct between 0 and 100)
+   );
+   alter table scores enable row level security;
+   create policy "read scores" on scores for select using (true);
+   create policy "post scores" on scores for insert with check (true);
+   ```
+3. Copy the Project URL and the anon public key (Project Settings → API) into `game/leaderboard-config.js`,
+   then commit and push.
+
+Anyone can post through the public key (as with any key-free web game), so the table's checks cap names and scores
+at plausible values; delete stray rows in the Supabase table editor.
+
 ## Controls
 
 | | Desktop | Touch |

@@ -8,6 +8,7 @@ import { WING, matchPhases, bodyAt } from './wings.js';
 import { World, Spray, Rings, Feathers, makeEnv, sharedUniforms, LOOK } from './fx.js';
 import { FishSchool } from './fish.js';
 import { Sound } from './audio.js';
+import { leaderboardOn, topScores, postScore, cleanName } from './leaderboard.js';
 import * as SH from './shaders.js';
 
 const QS = new URLSearchParams(location.search);
@@ -283,7 +284,44 @@ function endRun() {
   drawSpark();
   sound.chime(grade === 'S' || grade === 'A');
   G.result = { grade, pct, collisions: G.collisions, dunks: G.dunks, fish: G.fish, score };
+  showLeaderboard();
 }
+
+// shared leaderboard on the results screen (hidden unless game/leaderboard-config.js is filled in)
+function lbRender(rows, me) {
+  const ol = $('lbList'); ol.innerHTML = '';
+  for (const r of rows) {
+    const li = document.createElement('li');
+    const n = document.createElement('span'); n.textContent = r.name;
+    const v = document.createElement('span'); v.textContent = Number(r.score).toLocaleString();
+    li.append(n, v);
+    if (me && r.name === me.name && Number(r.score) === me.score) li.className = 'me';
+    ol.appendChild(li);
+  }
+  if (!rows.length) $('lbMsg').textContent = 'No scores yet for this game and flight. Be the first.';
+}
+async function showLeaderboard() {
+  $('lb').classList.toggle('hidden', !leaderboardOn);
+  if (!leaderboardOn) return;
+  $('lbName').value = store.get('name', '');
+  $('lbPost').disabled = !(G.result && G.result.score > 0); G.posted = false;
+  $('lbMsg').textContent = `Top 10 · ${G.gameMode === 'fish' ? 'Fish Frenzy' : 'Murmuration'} · ${DIFF[G.diffKey].label}`;
+  try { lbRender(await topScores(G.gameMode, G.diffKey)); } catch (e) { $('lbMsg').textContent = 'The leaderboard could not be reached.'; }
+}
+$('lbForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = cleanName($('lbName').value);
+  if (!name) { $('lbMsg').textContent = 'Type a name first (letters and numbers, up to 16).'; return; }
+  if (G.posted || !G.result) return;
+  store.set('name', name);
+  $('lbPost').disabled = true;
+  try {
+    const ok = await postScore({ name, mode: G.gameMode, diff: G.diffKey, score: G.result.score, fish: G.result.fish, pct: G.result.pct });
+    G.posted = ok;
+    $('lbMsg').textContent = ok ? 'Posted.' : 'That score could not be posted.';
+    lbRender(await topScores(G.gameMode, G.diffKey), { name, score: G.result.score });
+  } catch (err) { $('lbMsg').textContent = 'Posting failed. Check your connection and try again.'; $('lbPost').disabled = false; }
+});
 function frenzyLine(g) {
   if (g === 'S') return 'A gannet would be jealous. Hardly a fish got back to the water.';
   if (g === 'A') return 'Sharp timing on the dives. The sea run was yours.';

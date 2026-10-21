@@ -140,6 +140,14 @@ body[data-game="fish"] #qfill { background: var(--hot); }
 .stats { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; margin: 18px 0 0; }
 .stats dt { color: var(--dim); }
 .stats dd { margin: 0; text-align: right; font-weight: 600; }
+.lb { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.lbForm { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.lbForm input { flex: 1; min-width: 120px; font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,0.6); }
+.lbMsg { margin: 6px 0 0; font-size: 12px; color: var(--dim); min-height: 1.2em; }
+.lbList { margin: 4px 0 0; padding: 0; list-style: none; counter-reset: r; font-size: 13px; }
+.lbList li { display: grid; grid-template-columns: 1.6em 1fr auto; gap: 8px; padding: 2px 0; counter-increment: r; }
+.lbList li::before { content: counter(r); color: var(--dim); }
+.lbList li.me { color: var(--hot); font-weight: 600; }
 #spark { width: 100%; height: 56px; display: block; margin-top: 14px; }
 .sparkCap { font-size: 11px; color: var(--dim); display: flex; justify-content: space-between; margin-top: 2px; }
 #pause { inset: 0; z-index: 4; background: rgba(195,196,197,0.3); }
@@ -235,6 +243,13 @@ body[data-game="fish"] #qfill { background: var(--hot); }
   </dl>
   <canvas id="spark" aria-label="In-line share over the run"></canvas>
   <div class="sparkCap"><span>start</span><span id="sparkCap">in line, second by second (sea runs shaded)</span><span>end</span></div>
+  <div id="lb" class="lb hidden">
+    <form id="lbForm" class="lbForm"><label for="lbName" class="lbl">Leaderboard</label>
+      <input id="lbName" maxlength="16" placeholder="Your name" autocomplete="nickname">
+      <button id="lbPost" type="submit">Post score</button></form>
+    <p id="lbMsg" class="lbMsg"></p>
+    <ol id="lbList" class="lbList"></ol>
+  </div>
   <div class="go"><button id="again" class="primary">Fly again</button><button id="menu">Change flight</button></div>
 </section>
 
