@@ -22,6 +22,15 @@ of 4,000 (1,600 on phones), flying over a grey-blue sea under a bright overcast 
 flying fish leaping all around, alone, in pairs or as whole schools. Only the fish count. Catches within four seconds
 chain (×2, ×3, ...); a splashdown or a collision breaks the chain. It is graded on fish caught.
 
+**Sky Brawl** is the third game: a battle royale between you and eleven rival starlings, three feathers each. Ram a
+bird faster than it is flying into you and it loses a feather; at none it tumbles into the sea. A ring closes in over
+three minutes and costs a feather every few seconds outside it. Catching a flying fish grows a feather back. Last
+bird flying wins; the grade comes from your placing.
+
+Knocking a neighbour out of the sky scores points in every game (+75; +25 for flock birds in Sky Brawl, where rivals
+are worth +50 a hit and +250 a knockout). The **Steering** slider on the start screen sets how hard the stick turns
+the bird (30-120 %, 80 % by default).
+
 Flights: **Calm** (strong flocking instinct, wide tube), **Flock**, **Storm** (gusts, tight tube, slow neighbours).
 
 ## Leaderboard

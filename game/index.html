@@ -67,11 +67,13 @@ kbd { font: 11px/1 system-ui, sans-serif; border: 1px solid rgba(29,30,32,0.2); 
 .lbl { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; margin-right: 4px; }
 .opts { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--dim); }
 .opts label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+#optSens { width: 96px; accent-color: var(--accent); }
+#optSensV { min-width: 2.6em; font-variant-numeric: tabular-nums; }
 .go { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
 #bestLine { color: var(--dim); font-size: 12px; }
 .modeLine { font-size: 12.5px; min-height: 2.8em; }
-body[data-game="fish"] .tlKey { visibility: hidden; }
-body[data-game="fish"] #pctWrap small { display: none; }
+body[data-game="fish"] .tlKey, body[data-game="brawl"] .tlKey { visibility: hidden; }
+body[data-game="fish"] #pctWrap small, body[data-game="brawl"] #pctWrap small { display: none; }
 body[data-game="fish"] #qfill { background: var(--hot); }
 .credits { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 11px; color: var(--dim); line-height: 1.5; }
 
@@ -200,6 +202,7 @@ body[data-game="fish"] #qfill { background: var(--hot); }
     <div class="seg" role="group" aria-label="Game">
       <button data-game="murm">Murmuration</button>
       <button data-game="fish">Fish Frenzy</button>
+      <button data-game="brawl">Sky Brawl</button>
     </div>
   </div>
   <p id="modeLine" class="modeLine"></p>
@@ -211,6 +214,7 @@ body[data-game="fish"] #qfill { background: var(--hot); }
     </div>
   </div>
   <div class="opts">
+    <label for="optSens">Steering <input type="range" id="optSens" min="30" max="120" step="5"> <span id="optSensV">80%</span></label>
     <label id="optMouseL"><input type="checkbox" id="optMouse"> Mouse steering</label>
     <label><input type="checkbox" id="optInvert"> Invert up/down</label>
     <button class="mute" type="button" aria-pressed="false">Sound on</button>

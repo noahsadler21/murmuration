@@ -14,6 +14,7 @@ export class Input {
     this.touchBoost = false;
     this.invertY = false;
     this.mouseSteer = true;
+    this.sens = 0.8;               // steering sensitivity (settings): scales how far the stick turns the bird
     this.override = null;          // tests / bot: {sx, sy, boost, brake}
     this.raw = { sx: 0, sy: 0, boost: false, brake: false, src: 'none' };
     const kd = (e) => {
@@ -74,6 +75,7 @@ export class Input {
       sx *= k; sy *= k;
     }
     if (this.invertY && src !== 'none') sy = -sy;
+    sx *= this.sens; sy *= this.sens;
     this.raw = { sx, sy, boost: !!boost, brake: !!brake, src };
     return this.raw;
   }

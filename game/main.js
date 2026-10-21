@@ -8,6 +8,7 @@ import { WING, matchPhases, bodyAt } from './wings.js';
 import { World, Spray, Rings, Feathers, makeEnv, sharedUniforms, LOOK } from './fx.js';
 import { FishSchool } from './fish.js';
 import { Sound } from './audio.js';
+import { Brawl, BRAWL } from './brawl.js';
 import { leaderboardOn, topScores, postScore, cleanName } from './leaderboard.js';
 import * as SH from './shaders.js';
 
@@ -28,7 +29,7 @@ const DIFF = {
   storm: { label: 'Storm', assist: 0.22, pace: 0.45, ramp: 1.22, tol: 0.85, gust: 2.0, dodge: 1.5, catchR: 0.85, hitR: 0.32, crossers: 1.4, waves: 1.3 },
 };
 // two games: 'murm' (hold your place in the flock, 120 s) and 'fish' (Fish Frenzy: only the flying fish, 90 s)
-const runLen = (mode) => +(QS.get('runT') || (mode === 'fish' ? 90 : 120));
+const runLen = (mode) => +(QS.get('runT') || (mode === 'fish' ? 90 : mode === 'brawl' ? 180 : 120));
 let RUN_T = runLen('murm');
 // sea runs: four per run, at times and lengths drawn per run around these anchors (seconds of a 120 s run)
 function makeSweeps(R) {
@@ -68,6 +69,7 @@ const sound = new Sound();
 const input = new Input(canvas);
 input.invertY = store.get('invertY', false);
 input.mouseSteer = store.get('mouseSteer', true);
+input.sens = clamp(+store.get('sens', 0.8) || 0.8, 0.3, 1.2);
 
 // guide dots along the slot's future path
 const GN = 34;
@@ -118,7 +120,7 @@ window.addEventListener('resize', resize);
 const G = {
   mode: 'loading', t: 0, diffKey: store.get('diff', 'flock'), seed: 1,
   path: null, flock: null, player: new Player(), R: mulberry32(7),
-  gameMode: store.get('mode', 'murm') === 'fish' ? 'fish' : 'murm',
+  gameMode: ['fish', 'brawl'].includes(store.get('mode', 'murm')) ? store.get('mode', 'murm') : 'murm',
   score: 0, pathPts: 0, qSum: 0, qTime: 0, q: 0, collisions: 0, dunks: 0, fish: 0, combo: 0, bestCombo: 0, lastCatch: -99,
   hist: [], histAcc: 0, histT: 0, nextWave: 0, nextCross: 0, nextFish: 0, toasts: [], shake: 0, timeScale: 1, slowT: 0,
   fovKick: 0, flash: 0, bot: null, orbitA: 0, introT: 0, phaseShown: {}, lastQ: 1,
@@ -132,7 +134,7 @@ const heroBody = { heave: 0, surge: 0, pitch: 0 };
 function profileFor(run) {
   const D = DIFF[G.diffKey];
   if (!run) return () => ({ turn: 0.5, tau: 0.9, hold: 4 });
-  if (G.gameMode === 'fish') return () => ({ turn: 0.32 * D.ramp, tau: 1.1, hold: 5 });
+  if (G.gameMode === 'fish' || G.gameMode === 'brawl') return () => ({ turn: 0.32 * D.ramp, tau: 1.1, hold: 5 });
   return (t) => {
     const p = clamp(t / RUN_T, 0, 1);
     const e = smooth(0.03, 0.95, p);
@@ -143,11 +145,20 @@ function profileFor(run) {
 function newWorld(run, seed) {
   G.seed = seed;
   const Rw = mulberry32(seed ^ 0x9e3779b9);
-  const frenzy = run && G.gameMode === 'fish';
-  if (run) { SWEEPS = frenzy ? [] : makeSweeps(Rw); SLOT = makeSlot(Rw); }
-  // Fish Frenzy: the flock skims the sea for the whole run
+  const frenzy = run && G.gameMode === 'fish', brawlRun = run && G.gameMode === 'brawl';
+  if (run) { SWEEPS = frenzy || brawlRun ? [] : makeSweeps(Rw); SLOT = makeSlot(Rw); }
+  // Fish Frenzy: the flock skims the sea for the whole run; Sky Brawl: the flock wheels round the arena, mid-height
   const sweeps = frenzy ? [{ t0: -100, t1: 1e6 }] : run ? SWEEPS : [{ t0: 24, t1: 32 }, { t0: 74, t1: 82 }, { t0: 124, t1: 132 }];
-  G.path = new Path(seed, { profile: profileFor(run), sweeps, tStart: -8, alt: 27 + 10 * Rw() });
+  G.path = new Path(seed, { profile: profileFor(run), sweeps, tStart: -8, alt: brawlRun ? 22 : 27 + 10 * Rw() });
+  if (brawlRun) {
+    // keep the murmuration inside the arena, about 40 m out from its middle
+    G.path.steer = (t, s) => {
+      if (!brawl.on) return null;
+      const ax = brawl.cx - s.x, az = brawl.cz - s.z;
+      if (Math.hypot(ax, az) < 45) return null;
+      return wrapPi(Math.atan2(ax, az) - s.yaw) * 0.8;
+    };
+  }
   if (frenzy) {
     // keep the murmuration flying alongside: steer toward a point ahead of the player and ~44 m to one side (clear of the flock's half-width),
     // wandering freely once it is there
@@ -191,7 +202,8 @@ async function boot() {
   lods.near.addBlur(scene, [-0.045, 0.045], 0.32);
   ghost = new VatLOD(assets.real, { max: 1, defines: { GHOST: 1, SMOOTH_NRM: 1 }, shared, transparent: true, renderOrder: 9 });
   ghost.uniforms.uGhost.value.copy(LOOK.accent);
-  for (const L of [lods.near, lods.mid, lods.far, hero, ghost]) scene.add(L.mesh);
+  brawl.lod = new VatLOD(assets.real, { max: BRAWL.rivals, defines: { TEXTURED: 1, NORMALMAP: 1, SMOOTH_NRM: 1, IRID: 1, GLOSS: 1 }, shared, dark: 0.75 });
+  for (const L of [lods.near, lods.mid, lods.far, hero, ghost, brawl.lod]) scene.add(L.mesh);
   newWorld(false, (Math.random() * 1e9) | 0);
   G.t = 0;
   // warm the shaders up so the first frame of play doesn't hitch
@@ -219,11 +231,14 @@ function startRun(opts = {}) {
   store.set('diff', G.diffKey); store.set('mode', G.gameMode);
   RUN_T = runLen(G.gameMode);
   document.body.dataset.game = G.gameMode;
-  $('capTop').textContent = G.gameMode === 'fish' ? 'fish caught' : 'in line';
-  $('capFish').textContent = G.gameMode === 'fish' ? 'Chain' : 'Fish';
-  $('capHits').textContent = G.gameMode === 'fish' ? 'Leapt' : 'Hits';
+  const GM = G.gameMode;
+  $('capTop').textContent = GM === 'fish' ? 'fish caught' : GM === 'brawl' ? 'birds left' : 'in line';
+  $('capFish').textContent = GM === 'fish' ? 'Chain' : GM === 'brawl' ? 'Knockouts' : 'Fish';
+  $('capHits').textContent = GM === 'fish' ? 'Leapt' : GM === 'brawl' ? 'Feathers' : 'Hits';
+  G.endAt = null;
   sound.start();
   const seed = opts.seed ?? ((Math.random() * 1e9) | 0);
+  brawl.stop();
   newWorld(true, seed);
   Object.assign(G, {
     score: 0, pathPts: 0, qSum: 0, qTime: 0, q: 1, collisions: 0, dunks: 0, fish: 0, combo: 0, bestCombo: 0, lastCatch: -99,
@@ -244,15 +259,18 @@ function startRun(opts = {}) {
   $('count').classList.toggle('hidden', introLen <= 0);
   renderTimeline();
   if (G.gameMode === 'fish' && introLen <= 0) G.nextFish = 0.5;
+  if (G.gameMode === 'brawl') { brawl.start(seed, G.player, G.diffKey, G.R); G.nextFish = 4; } else brawl.stop();
 }
 
 function endRun() {
   setMode('end');
   for (const f of floaters) f.el.remove();
   floaters.length = 0;
+  if (G.gameMode === 'brawl') return endBrawl();
   const frenzy = G.gameMode === 'fish';
   const pct = G.qTime > 0 ? 100 * G.qSum / G.qTime : 0;
-  const eff = pct - 2 * G.collisions - 1.5 * G.dunks;
+  // knocking a neighbour out now scores points instead of costing grade; only splashdowns cost grade
+  const eff = pct - 1.5 * G.dunks;
   // Fish Frenzy grades on fish per minute (the catch count scaled to a 90 s run)
   const fpm = G.fish * 90 / RUN_T;
   const grade = frenzy ? (fpm >= 42 ? 'S' : fpm >= 30 ? 'A' : fpm >= 20 ? 'B' : fpm >= 11 ? 'C' : 'D')
@@ -322,6 +340,33 @@ $('lbForm').addEventListener('submit', async (e) => {
     lbRender(await topScores(G.gameMode, G.diffKey), { name, score: G.result.score });
   } catch (err) { $('lbMsg').textContent = 'Posting failed. Check your connection and try again.'; $('lbPost').disabled = false; }
 });
+const ORD = (n) => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
+function endBrawl() {
+  const B = brawl, me = B.player;
+  const place = me.dead ? me.place : 1 + B.birds.filter((b) => b.state === 'fly').length - (B.winner === 'player' ? 0 : 0);
+  const won = !me.dead && B.alive() === 1;
+  const placeN = won ? 1 : me.dead ? me.place : 1 + B.birds.filter((b) => b.state === 'fly').length;
+  G.score += won ? 1000 : Math.max(0, (BRAWL.rivals + 1 - placeN)) * 60;
+  const grade = placeN === 1 ? 'S' : placeN <= 3 ? 'A' : placeN <= 6 ? 'B' : placeN <= 9 ? 'C' : 'D';
+  const key = 'best.brawl.' + G.diffKey, best = store.get(key, 0), score = Math.round(G.score);
+  if (score > best) store.set(key, score);
+  $('rTitle').textContent = won ? 'Last bird flying!' : `Out in ${ORD(placeN)} place`;
+  $('rGrade').textContent = grade; $('rGrade').dataset.g = grade;
+  $('rPctL').textContent = 'Placing'; $('rPct').textContent = `${ORD(placeN)} of ${BRAWL.rivals + 1}`;
+  $('rHitsL').textContent = 'Knockouts · hits landed'; $('rHits').textContent = `${me.kos} · ${me.hits}`;
+  $('rFishL').textContent = 'Survived'; $('rFish').textContent = `${Math.round(Math.min(G.t, RUN_T))} s`;
+  $('rScore').textContent = score.toLocaleString();
+  $('rBest').textContent = score > best ? 'new best' : 'best ' + best.toLocaleString();
+  $('rDiff').textContent = DIFF[G.diffKey].label;
+  $('rLine').textContent = won ? 'Twelve starlings went up; you came down alone. The sky is yours.'
+    : placeN <= 3 ? 'So close. Boost into birds from the side, and keep your back clear.'
+      : 'Ram birds faster than they ram you, catch a fish to grow back a feather, and stay inside the ring.';
+  $('sparkCap').textContent = 'birds still flying, second by second';
+  drawSpark();
+  sound.chime(won);
+  G.result = { grade, place: placeN, won, kos: me.kos, hits: me.hits, score, fish: G.fish, pct: 0, collisions: G.collisions, dunks: G.dunks };
+  showLeaderboard();
+}
 function frenzyLine(g) {
   if (g === 'S') return 'A gannet would be jealous. Hardly a fish got back to the water.';
   if (g === 'A') return 'Sharp timing on the dives. The sea run was yours.';
@@ -387,6 +432,13 @@ function botInput() {
     if (best) { const lead = Math.min(0.5, bd / 16); tx = best.x + best.vx * lead; ty = best.y + best.vy * lead; tz = best.z + best.vz * lead; }
     else mode = 'lane';
   }
+  if (mode === 'brawl') {
+    // hunt the nearest rival, leading it
+    let best = null, bd = 1e9;
+    for (const b of brawl.birds) { if (b.state !== 'fly') continue; const d = Math.hypot(b.x - P.x, b.y - P.y, b.z - P.z); if (d < bd) { bd = d; best = b; } }
+    if (best) { const lead = Math.min(0.7, bd / 12); tx = best.x + (best.vx - P.vx) * lead; ty = best.y + (best.vy - P.vy) * lead; tz = best.z + (best.vz - P.vz) * lead; G.botClose = bd > 18; }
+    else mode = 'lane';
+  }
   if (mode === 'ram') {
     // lock onto the nearest bird ahead and fly straight at it until it is hit (or lost)
     let bi = G.botTarget ?? -1;
@@ -421,7 +473,7 @@ function botInput() {
   const A = DIFF[G.diffKey].assist;
   const sx = clamp(-wrapPi(yawT - P.yaw) * 2.4 - P.yawRate * 0.08, -1, 1);
   const sy = clamp((pitchT - P.pitch * (1 - A)) * 2.0, -1, 1);
-  return { sx, sy, boost: mode === 'fish' || (mode === 'ram' && !G.botClose) ? true : mode === 'lane' && along < -1.5, brake: mode === 'lane' && along > 1.5 };
+  return { sx, sy, boost: mode === 'fish' || (mode === 'ram' && !G.botClose) || (mode === 'brawl' && !G.botClose) ? true : mode === 'lane' && along < -1.5, brake: mode === 'lane' && along > 1.5 };
 }
 
 // ------------------------------------------------------------------------------------------------ frame update
@@ -448,13 +500,14 @@ function frame(dtReal) {
       if (playing && !G.phaseShown.wave) { G.phaseShown.wave = 1; setTimeout(() => toast('A wave is running through the flock', 'info'), 1200); }
       G.nextWave = t + (G.mode === 'title' ? 5 : lerp(9, 3.2, p) / D.waves) * (0.75 + 0.5 * G.R());
     }
-    if (playing && G.gameMode !== 'fish' && t >= G.nextCross) {
+    if (playing && G.gameMode === 'murm' && t >= G.nextCross) {
       const i = F.addCrosser(t, G.R, F.slot);
       if (i >= 0 && !G.phaseShown.cross) { G.phaseShown.cross = 1; toast('Watch out: neighbours drifting through your lane', 'info', 2.6); }
       G.nextCross = t + lerp(8, 3, p) / D.crossers * (0.7 + 0.6 * G.R());
     }
-    if (t >= G.nextFish) (G.gameMode === 'fish' && G.mode !== 'title' ? spawnFrenzy(t) : spawnFish(t));
-    if (playing && G.gameMode !== 'fish') {
+    if (t >= G.nextFish) (G.gameMode === 'fish' && G.mode !== 'title' ? spawnFrenzy(t)
+      : G.gameMode === 'brawl' && G.mode !== 'title' ? (spawnFrenzy(t), G.nextFish = t + 3.5 + G.R() * 3) : spawnFish(t));
+    if (playing && G.gameMode === 'murm') {
       for (const s of SWEEPS) {
         const k = 'sw' + s.t0;
         if (t > s.t0 - 2.5 && !G.phaseShown[k]) { G.phaseShown[k] = 1; toast('Sea run — dive for the flying fish', 'fish', 2.6); sound.chime(true); }
@@ -478,7 +531,8 @@ function frame(dtReal) {
       $('count').textContent = c > 0 ? String(c) : 'Go';
       if (G.introT >= G.introLen) {
         setMode('play'); $('count').textContent = 'Go'; setTimeout(() => $('count').classList.add('hidden'), 500);
-        toast(G.gameMode === 'fish' ? 'Catch the flying fish. Quick catches chain for more.' : 'Hold your place in the flock', 'info', 2.6);
+        toast(G.gameMode === 'fish' ? 'Catch the flying fish. Quick catches chain for more.'
+          : G.gameMode === 'brawl' ? 'Ram the other birds out of the sky. Stay inside the ring.' : 'Hold your place in the flock', 'info', 2.8);
         if (G.gameMode === 'fish') G.nextFish = t + 0.3;
       }
     } else if (playing) {
@@ -489,10 +543,12 @@ function frame(dtReal) {
         const ex = P.x - tmpS.x, ey = P.y - tmpS.y, ez = P.z - tmpS.z;
         const along = ex * S.fx + ey * S.fy + ez * S.fz;
         P.seaY = world.sea.heightAt(P.x, P.z);
-        P.step(h, inp, S, S.v, along, G.gameMode === 'fish' ? FRENZY_FLIGHT[G.diffKey] : D, G.R, onDunk);
+        P.step(h, inp, S, S.v, along, G.gameMode !== 'murm' ? FRENZY_FLIGHT[G.diffKey] : D, G.R, onDunk);
       }
-      if (G.gameMode === 'fish') frenzyTick(dt); else grade(dt, S, D);
-      if (t >= RUN_T) { endRun(); }
+      if (G.gameMode === 'fish') frenzyTick(dt);
+      else if (G.gameMode === 'brawl') brawlTick(dt, t);
+      else grade(dt, S, D);
+      if (t >= RUN_T || (G.endAt !== null && t >= G.endAt)) { endRun(); }
     }
   }
 
@@ -501,6 +557,7 @@ function frame(dtReal) {
   F.update(t, dt, playerForFlock, camera.position, lods, { onHit, onSplash: (x, z, s) => { rings.ring(x, z, 1.4, 1.3, 0.5); spray.splash(x, z, s, G.R); sound.splash(0.4); } });
   fishes.update(dt, t, G.mode === 'play' ? P : null, D.catchR, onCatch, G.R);
   spray.update(dt); down.update(dt); rings.update(dt); feathers.update(dt);
+  brawl.render(t);
 
   // camera
   updateCamera(dtReal, S);
@@ -518,13 +575,13 @@ function frame(dtReal) {
     hero.push(P.x + P.fx * bd.surge * fl, P.y + P.sinkY + bd.heave * fl, P.z + P.fz * bd.surge * fl, 1, qtmp, P.phase, P.glide, P.bound);
     const off = G.mode === 'play' && G.dist !== undefined ? G.dist : 0;
     const camD = camera.position.distanceTo(_v.set(tmpS.x, tmpS.y, tmpS.z));
-    const ga = G.mode === 'play' && G.gameMode !== 'fish' ? smooth(0.9, 2.2, off) * smooth(1.2, 2.6, camD) * 0.6 : 0;
+    const ga = G.mode === 'play' && G.gameMode === 'murm' ? smooth(0.9, 2.2, off) * smooth(1.2, 2.6, camD) * 0.6 : 0;
     if (ga > 0.01) {
       quatFromFwdRoll(qtmp, S.fx, S.fy, S.fz, tmpS.bank);
       ghost.push(tmpS.x, tmpS.y, tmpS.z, 1, qtmp, (t * 13.3) % 1, 0.2, 0);
     }
     ghost.uniforms.uGhostA.value = ga;
-    if (G.gameMode !== 'fish') updateGuide(t, off); else { guide.pts.visible = false; for (const h of hoops) h.mesh.visible = false; }
+    if (G.gameMode === 'murm') updateGuide(t, off); else { guide.pts.visible = false; for (const h of hoops) h.mesh.visible = false; }
   } else { guide.pts.visible = false; for (const h of hoops) h.mesh.visible = false; }
   hero.end(); ghost.end();
 }
@@ -553,8 +610,9 @@ function onHit(i, x, y, z) {
   const P = G.player, F = G.flock;
   F.knock(i, P.vx, P.vy, P.vz, G.R);
   P.hit(G.R);
-  const frenzy = G.gameMode === 'fish';
-  G.collisions++; if (!frenzy) G.score = Math.max(0, G.score - 120); G.combo = 0; G.lastCatch = -99;
+  // knocking a neighbour out of the sky scores
+  const pts = G.gameMode === 'brawl' ? 25 : 75;
+  G.collisions++; G.score += pts;
   feathers.burst(x, y, z, P.vx, P.vy, P.vz, 18, G.R);
   for (let k = 0; k < 40; k++) {
     const a = G.R() * 6.283, b = G.R() * 2 - 1, sp = 0.6 + G.R() * 2.6;
@@ -562,9 +620,9 @@ function onHit(i, x, y, z) {
   }
   feathers.burst(P.x, P.y, P.z, P.vx, P.vy, P.vz, 5, G.R);
   sound.hit();
-  G.shake = 0.5; G.flash = 1; G.slowT = Math.max(G.slowT, 0.09);
-  floatText(frenzy ? 'chain broken' : '−120', x, y + 0.3, z, 'bad');
-  if (G.collisions === 1) toast(frenzy ? 'Collision! It cost you your chain' : 'Collision! That bird is going down', 'warn', 1.8);
+  G.shake = 0.4; G.flash = 0.35; G.slowT = Math.max(G.slowT, 0.09);
+  floatText(`+${pts}`, x, y + 0.3, z, 'good');
+  if (G.collisions === 1) toast('Knocked one out of the sky!', 'fish', 1.8);
 }
 function onDunk(x, z) {
   const frenzy = G.gameMode === 'fish';
@@ -581,6 +639,7 @@ function onCatch(f) {
   G.fish++;
   const pts = 100 * G.combo;
   G.score += pts;
+  if (G.gameMode === 'brawl' && brawl.player.hp < BRAWL.hp && !brawl.player.dead) { brawl.player.hp++; toast('A fish: one feather back', 'fish', 1.4); }
   sound.fish(G.combo);
   for (let k = 0; k < 14; k++) {
     const a = G.R() * 6.283, b = G.R() * 2 - 1, s = 1 + G.R() * 2;
@@ -592,6 +651,36 @@ function onCatch(f) {
 }
 
 const CHAIN_S = 4;
+const brawl = new Brawl(scene, null);
+const brawlHooks = {
+  seaH: (x, z) => world.sea.heightAt(x, z),
+  onSplash: (x, z) => { rings.ring(x, z, 1.6, 1.3, 0.55); spray.splash(x, z, 0.9, G.R); sound.splash(0.5); },
+  onHit: (by, b, x, y, z, byPlayer) => {
+    feathers.burst(x, y, z, b.vx, b.vy, b.vz, byPlayer ? 14 : 6, G.R);
+    if (byPlayer) { G.score += 50; floatText('+50', x, y + 0.3, z, 'good'); sound.hit(); G.shake = Math.max(G.shake, 0.25); G.slowT = 0.07; }
+  },
+  onKO: (b, byPlayer) => {
+    if (byPlayer) { G.score += 250; toast(`You knocked ${b.name} out! +250`, 'fish', 1.8); }
+    else if (G.R() < 0.5) toast(`${b.name} is out`, 'info', 1.2);
+  },
+  onPlayerHit: (by, x, y, z) => {
+    const P = G.player;
+    P.hit(G.R); feathers.burst(P.x, P.y, P.z, P.vx, P.vy, P.vz, 12, G.R); sound.hit();
+    G.shake = 0.5; G.flash = 1; G.slowT = 0.09;
+    floatText('−1 feather', P.x, P.y + 0.4, P.z, 'bad');
+  },
+  onPlayerOut: (by) => { toast(by && by.name ? `${by.name} knocked you out` : 'You are out', 'warn', 2); G.endAt = G.t + 1.6; },
+};
+let ringWarn = 0;
+function brawlTick(dt, t) {
+  brawl.update(dt, t, G.player, brawlHooks);
+  G.q = brawl.player.hp / BRAWL.hp;
+  G.histT += dt;
+  if (G.histT >= 1) { G.hist.push(brawl.alive()); G.histT = 0; }
+  const out = Math.hypot(G.player.x - brawl.cx, G.player.z - brawl.cz) > brawl.radius(t);
+  if (out && t > ringWarn) { toast('Outside the ring: get back in before you lose a feather', 'warn', 1.8); ringWarn = t + 4; }
+  if (brawl.winner === 'player' && G.endAt === null) { toast('Last bird flying!', 'fish', 2.4); G.endAt = t + 2; }
+}
 // Fish Frenzy flight: no pull toward a place in the flock, a light flocking instinct so a centred stick flies on with
 // the birds, and the same gusts as the chosen flight
 const FRENZY_FLIGHT = Object.fromEntries(Object.entries(DIFF).map(([k, d]) => [k, { ...d, assist: d.assist * 0.35, pace: 0 }]));
@@ -752,12 +841,14 @@ function hud(dtReal) {
   if (G.mode === 'play' || G.mode === 'intro' || G.mode === 'paused') {
     const frenzy = G.gameMode === 'fish';
     const pct = G.qTime > 0.2 ? 100 * G.qSum / G.qTime : 100;
-    $('pct').textContent = frenzy ? String(G.fish) : G.mode === 'intro' ? '–' : pct.toFixed(0);
+    const bw = G.gameMode === 'brawl';
+    $('pct').textContent = bw ? String(brawl.on ? brawl.alive() : BRAWL.rivals + 1) : frenzy ? String(G.fish) : G.mode === 'intro' ? '–' : pct.toFixed(0);
     $('qfill').style.width = (100 * (frenzy ? G.q : G.mode === 'intro' ? 1 : G.q)) + '%';
     $('hud').dataset.q = frenzy ? 'good' : G.q > 0.75 ? 'good' : G.q > 0.3 ? 'mid' : 'bad';
     $('sScore').textContent = Math.round(G.score).toLocaleString();
-    $('sFish').textContent = frenzy ? (G.combo > 1 && G.q > 0 ? '×' + G.combo : '–') : G.fish;
-    $('sHits').textContent = frenzy ? fishes.spawned : G.collisions + G.dunks;
+    $('sFish').textContent = bw ? brawl.player.kos : frenzy ? (G.combo > 1 && G.q > 0 ? '×' + G.combo : '–') : G.fish;
+    $('sHits').textContent = bw ? '●'.repeat(Math.max(0, brawl.player.hp)) + '○'.repeat(Math.max(0, BRAWL.hp - brawl.player.hp)) : frenzy ? fishes.spawned : G.collisions + G.dunks;
+    if (bw) $('hud').dataset.q = brawl.player.hp >= 3 ? 'good' : brawl.player.hp === 2 ? 'mid' : 'bad';
     const rem = Math.max(0, RUN_T - Math.max(0, G.t));
     $('sTime').textContent = `${Math.floor(rem / 60)}:${String(Math.floor(rem % 60)).padStart(2, '0')}`;
     $('tlFill').style.width = (100 * clamp(G.t / RUN_T, 0, 1)) + '%';
@@ -805,7 +896,8 @@ function drawOverlay() {
   }
   octx.globalAlpha = 1;
   // where is my place? when the slot leaves the screen, an arrow at the edge points back to it
-  if (G.mode === 'play' && G.gameMode !== 'fish') {
+  if (G.gameMode === 'brawl' && brawl.on) drawRivals(w, h, k, acc);
+  if (G.mode === 'play' && G.gameMode === 'murm') {
     const v = _v.set(tmpS.x, tmpS.y, tmpS.z).project(camera);
     const behind = v.z > 1;
     let x = v.x, y = v.y;
@@ -839,6 +931,27 @@ function drawOverlay() {
   octx.restore();
 }
 
+// rival markers: a small caret above each bird in view, with its feathers left
+function drawRivals(w, h, k, acc) {
+  for (const b of brawl.birds) {
+    if (b.state !== 'fly') continue;
+    const d = camera.position.distanceTo(_w.set(b.x, b.y, b.z));
+    if (d > 140) continue;
+    const v = _v.set(b.x, b.y + 0.35, b.z).project(camera);
+    if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) continue;
+    const sx = (v.x * 0.5 + 0.5) * w, sy = (-v.y * 0.5 + 0.5) * h - 6;
+    octx.globalAlpha = clamp(1.3 - d / 120, 0.35, 1);
+    octx.fillStyle = acc;
+    octx.beginPath(); octx.moveTo(sx - 5, sy - 7); octx.lineTo(sx + 5, sy - 7); octx.lineTo(sx, sy); octx.closePath(); octx.fill();
+    for (let i = 0; i < BRAWL.hp; i++) {
+      octx.beginPath(); octx.arc(sx - 6 + i * 6, sy - 12, 2, 0, Math.PI * 2);
+      if (i < b.hp) octx.fill(); else { octx.strokeStyle = acc; octx.lineWidth = 1; octx.stroke(); }
+    }
+    if (d < 40) { octx.font = '11px system-ui, sans-serif'; octx.textAlign = 'center'; octx.fillStyle = '#1d1e20'; octx.fillText(b.name, sx, sy - 18); }
+  }
+  octx.globalAlpha = 1;
+}
+
 function drawSpark() {
   const c = $('spark'), x = c.getContext('2d');
   const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -846,6 +959,13 @@ function drawSpark() {
   c.width = W * dpr; c.height = H * dpr; x.scale(dpr, dpr);
   x.clearRect(0, 0, W, H);
   const h = G.hist; if (h.length < 2) return;
+  if (G.gameMode === 'brawl') {
+    x.strokeStyle = '#e0672a'; x.lineWidth = 1.6; x.lineJoin = 'round';
+    x.beginPath();
+    h.forEach((n, i) => { const px = (i + 0.5) / Math.max(h.length, 30) * W, py = H - 2 - (n / (BRAWL.rivals + 1)) * (H - 6); i ? x.lineTo(px, py) : x.moveTo(px, py); });
+    x.stroke();
+    return;
+  }
   if (G.gameMode === 'fish') {
     // cumulative catch curve
     const top = Math.max(1, h[h.length - 1]);
@@ -894,14 +1014,16 @@ document.querySelectorAll('[data-diff]').forEach((b) => {
   });
 });
 function bestText() {
-  const b = store.get((G.gameMode === 'fish' ? 'best.fish.' : 'best.') + G.diffKey, 0);
+  const b = store.get((G.gameMode === 'fish' ? 'best.fish.' : G.gameMode === 'brawl' ? 'best.brawl.' : 'best.') + G.diffKey, 0);
   return b ? `Best on ${DIFF[G.diffKey].label}: ${b.toLocaleString()}` : '';
 }
 function syncModeButtons() {
   document.querySelectorAll('[data-game]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.game === G.gameMode)));
   $('modeLine').textContent = G.gameMode === 'fish'
     ? 'Fish Frenzy: the flock skims the sea for 90 seconds and flying fish leap all around. Catch as many as you can; quick catches chain.'
-    : 'Murmuration: two minutes inside the flock. Hold your place, miss your neighbours, and dive for fish on the sea runs.';
+    : G.gameMode === 'brawl'
+      ? 'Sky Brawl: you and eleven rival starlings, three feathers each. Ram them out of the sky, catch fish to grow feathers back, stay inside the closing ring. Last bird flying wins.'
+      : 'Murmuration: two minutes inside the flock. Hold your place, keep in line, knock stray neighbours out for points, and dive for fish on the sea runs.';
   $('bestLine').textContent = bestText();
 }
 document.querySelectorAll('[data-game]').forEach((b) => b.addEventListener('click', () => { G.gameMode = b.dataset.game; store.set('mode', G.gameMode); syncModeButtons(); }));
@@ -912,7 +1034,9 @@ $('again').addEventListener('click', () => startRun());
 $('menu').addEventListener('click', () => { newWorld(false, (Math.random() * 1e9) | 0); G.t = 0; camState.init = false; G.nextWave = 0; G.nextFish = 0; setMode('title'); });
 $('resume').addEventListener('click', () => pauseToggle(false));
 $('quit').addEventListener('click', () => { newWorld(false, (Math.random() * 1e9) | 0); G.t = 0; camState.init = false; G.nextWave = 0; G.nextFish = 0; setMode('title'); });
-const optInv = $('optInvert'), optMouse = $('optMouse');
+const optInv = $('optInvert'), optMouse = $('optMouse'), optSens = $('optSens');
+optSens.value = Math.round(input.sens * 100); $('optSensV').textContent = optSens.value + '%';
+optSens.addEventListener('input', () => { input.sens = +optSens.value / 100; $('optSensV').textContent = optSens.value + '%'; store.set('sens', input.sens); });
 optInv.checked = input.invertY; optMouse.checked = input.mouseSteer;
 optInv.addEventListener('change', () => { input.invertY = optInv.checked; store.set('invertY', optInv.checked); });
 optMouse.addEventListener('change', () => { input.mouseSteer = optMouse.checked; store.set('mouseSteer', optMouse.checked); });
@@ -933,6 +1057,7 @@ $('pause').addEventListener('click', (e) => { if (e.target === $('pause')) pause
 // ------------------------------------------------------------------------------------------------ test / debug API
 window.game = {
   G, DIFF, get SLOT() { return SLOT; }, get SWEEPS() { return SWEEPS; }, get RUN_T() { return RUN_T; }, fishes, input, camera, scene, renderer, get lods() { return lods; }, get hero() { return hero; }, get ghost() { return ghost; },
+  brawl,
   start: (o) => startRun(o),
   bot: (m) => { G.bot = m || null; if (!m) input.override = null; },
   // advance the simulation in fixed steps without waiting for frames (headless tests)

@@ -41,7 +41,7 @@ const check = (name, ok, info) => { checks.push({ name, ok: !!ok, info }); conso
     out.ram = r;
     check('ram bot collides', r.collisions >= 3, { collisions: r.collisions });
     check('hit birds fall (falling or already in the sea)', r.falling + r.lost >= 1, { falling: r.falling, lost: r.lost });
-    check('collisions are penalised (score < lane pace)', r.score < 14 * 25, { score: r.score });
+    check('knocking birds out scores points', r.score >= r.collisions * 75 && r.collisions > 0, { score: r.score, collisions: r.collisions });
     await s.evalp('game.bot(null); game.input.override = {sx: 0, sy: 0}; game.advance(0.6); game.G.manual = true; game.render(); 1'); await s.shot('game_ram.png'); await s.evalp('game.G.manual = false; 1');
     r = JSON.parse(await s.evalp(`JSON.stringify(game.advance(6))`));
     check('falling birds reach the sea and leave the flock', r.lost >= 1, { lost: r.lost, falling: r.falling });
@@ -82,6 +82,20 @@ const check = (name, ok, info) => { checks.push({ name, ok: !!ok, info }); conso
     check('Fish Frenzy: lots of fish leap and the bot catches some', r.fishSpawned > 120 && r.fish >= 5, { leapt: r.fishSpawned, caught: r.fish, grade: r.result && r.result.grade });
     check('Fish Frenzy results screen', await s.evalp(`document.getElementById('rTitle').textContent === 'Fish Frenzy over' && /of/.test(document.getElementById('rPct').textContent)`),
       { pct: await s.evalp(`document.getElementById('rPct').textContent`) });
+    await s.evalp(`game.G.gameMode = 'murm'; 1`);
+
+    // Sky Brawl: rivals fight, knockouts happen, the run ends with a placing
+    r = JSON.parse(await s.evalp(`game.input.override = null; game.start({seed: 27, mode: 'brawl', diff: 'flock', skipIntro: true}); game.bot('brawl'); game.advance(40);
+      JSON.stringify({ ...game.stats(), alive: game.brawl.alive(), out: game.brawl.birds.filter((b) => b.state !== 'fly').length, hp: game.brawl.player.hp, kos: game.brawl.player.kos })`));
+    out.brawl40 = r;
+    check('Sky Brawl: birds get knocked out', r.out >= 1, { out: r.out, alive: r.alive, playerHp: r.hp, playerKOs: r.kos });
+    r = JSON.parse(await s.evalp(`JSON.stringify(game.advance(150))`));
+    out.brawl = r;
+    check('Sky Brawl ends with a placing', r.mode === 'end' && r.result && r.result.place >= 1, r.result);
+    check('Sky Brawl results screen', await s.evalp(`/place|flying/.test(document.getElementById('rTitle').textContent)`), { title: await s.evalp(`document.getElementById('rTitle').textContent`) });
+    // steering sensitivity scales the stick
+    const sens = await s.evalp(`(() => { game.input.override = null; game.bot(null); game.input.sens = 0.5; game.input.keys.add('ArrowRight'); const a = game.input.read().sx; game.input.keys.delete('ArrowRight'); game.input.sens = 0.8; return a; })()`);
+    check('steering sensitivity scales the turn', Math.abs(sens - 0.5) < 1e-6, { sx: sens });
     await s.evalp(`game.G.gameMode = 'murm'; 1`);
 
     // asset contract read defensively: a future rebake with variants and fewer keys still yields a usable layout
