@@ -186,7 +186,7 @@ function newWorld(run, seed) {
 async function boot() {
   resize();
   // the game's own copy of the birds (the new v5 starling) first; the main site's birds if that is missing
-  let base = new URL('assets/birds/', location.href).href;
+  let base = new URL(QS.get('assets') === 'site' ? '../assets/birds/' : 'assets/birds/', location.href).href;
   try { assets = await loadStarlings(base, (k) => { $('loadbar').style.width = Math.round(k * 90) + '%'; }); }
   catch (e) { base = new URL('../assets/birds/', location.href).href; assets = await loadStarlings(base, (k) => { $('loadbar').style.width = Math.round(k * 90) + '%'; }); }
   // the player's feathered bird; without it the VAT hero below stands in
@@ -247,6 +247,7 @@ function startRun(opts = {}) {
   sound.start();
   const seed = opts.seed ?? ((Math.random() * 1e9) | 0);
   brawl.stop();
+  G.botTarget = undefined; G.botClose = false;
   newWorld(true, seed);
   Object.assign(G, {
     score: 0, pathPts: 0, qSum: 0, qTime: 0, q: 1, collisions: 0, dunks: 0, fish: 0, combo: 0, bestCombo: 0, lastCatch: -99,

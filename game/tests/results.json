@@ -1,5 +1,5 @@
 {
- "when": "2026-10-21T18:23:59.237Z",
+ "when": "2026-10-21T18:30:35.877Z",
  "checks": [
   {
    "name": "title screen shows",
@@ -49,7 +49,7 @@
   },
   {
    "name": "ram bot collides",
-   "ok": false,
+   "ok": true,
    "info": {
     "collisions": 1
    }
@@ -66,7 +66,7 @@
    "name": "knocking birds out scores points",
    "ok": true,
    "info": {
-    "score": 191,
+    "score": 217,
     "collisions": 1
    }
   },
@@ -99,7 +99,7 @@
    "ok": true,
    "info": {
     "yaw0": 2.839451206566078,
-    "yaw1": 1.4664089464415377
+    "yaw1": 1.434852603801205
    }
   },
   {
@@ -130,8 +130,8 @@
    "name": "Fish Frenzy: lots of fish leap and the bot catches some",
    "ok": true,
    "info": {
-    "leapt": 186,
-    "caught": 13,
+    "leapt": 184,
+    "caught": 15,
     "grade": "C"
    }
   },
@@ -139,7 +139,7 @@
    "name": "Fish Frenzy results screen",
    "ok": true,
    "info": {
-    "pct": "13 of 186"
+    "pct": "15 of 184"
    }
   },
   {
@@ -157,11 +157,11 @@
    "ok": true,
    "info": {
     "grade": "C",
-    "place": 8,
+    "place": 9,
     "won": false,
-    "kos": 3,
-    "hits": 6,
-    "score": 1290,
+    "kos": 2,
+    "hits": 5,
+    "score": 930,
     "fish": 0,
     "pct": 0,
     "collisions": 0,
@@ -172,7 +172,7 @@
    "name": "Sky Brawl results screen",
    "ok": true,
    "info": {
-    "title": "Out in 8th place"
+    "title": "Out in 9th place"
    }
   },
   {
@@ -303,15 +303,15 @@
    "mode": "play",
    "t": 13.87,
    "diff": "flock",
-   "pathPct": 33.47,
-   "q": 0,
-   "dist": 6.82,
+   "pathPct": 40.83,
+   "q": 0.157,
+   "dist": 3.44,
    "collisions": 1,
    "dunks": 0,
    "fish": 0,
    "fishSpawned": 2,
    "fishMissed": 1,
-   "score": 191,
+   "score": 217,
    "birds": 4000,
    "falling": 0,
    "lost": 1,
@@ -325,12 +325,12 @@
     "score": 604
    },
    "draw": {
-    "near": 394,
-    "mid": 3605,
+    "near": 596,
+    "mid": 3403,
     "far": 0
    },
    "calls": 25,
-   "tris": 845412
+   "tris": 1089428
   },
   "fish": {
    "mode": "end",
@@ -365,20 +365,20 @@
    "calls": 7,
    "tris": 325990
   },
-  "fps": "{\"mode\":\"play\",\"t\":3.67,\"diff\":\"calm\",\"pathPct\":100,\"q\":1,\"dist\":0.61,\"collisions\":0,\"dunks\":0,\"fish\":0,\"fishSpawned\":0,\"fishMissed\":0,\"score\":92,\"birds\":4000,\"falling\":0,\"lost\":0,\"fps\":60,\"result\":{\"grade\":\"D\",\"pct\":24.06553804773361,\"collisions\":11,\"dunks\":7,\"fish\":19,\"score\":5687},\"draw\":{\"near\":486,\"mid\":3514,\"far\":0},\"calls\":22,\"tris\":954512}",
+  "fps": "{\"mode\":\"play\",\"t\":3.65,\"diff\":\"calm\",\"pathPct\":100,\"q\":1,\"dist\":0.6,\"collisions\":0,\"dunks\":0,\"fish\":0,\"fishSpawned\":0,\"fishMissed\":0,\"score\":91,\"birds\":4000,\"falling\":0,\"lost\":0,\"fps\":60,\"result\":{\"grade\":\"D\",\"pct\":24.06553804773361,\"collisions\":11,\"dunks\":7,\"fish\":19,\"score\":5687},\"draw\":{\"near\":484,\"mid\":3516,\"far\":0},\"calls\":22,\"tris\":952096}",
   "frenzy": {
    "mode": "end",
    "t": 90.01,
    "diff": "flock",
    "pathPct": null,
    "q": 0,
-   "dist": 0.61,
+   "dist": 0.6,
    "collisions": 2,
-   "dunks": 14,
-   "fish": 13,
-   "fishSpawned": 186,
-   "fishMissed": 164,
-   "score": 1950,
+   "dunks": 3,
+   "fish": 15,
+   "fishSpawned": 184,
+   "fishMissed": 161,
+   "score": 3350,
    "birds": 4000,
    "falling": 0,
    "lost": 2,
@@ -387,17 +387,17 @@
     "grade": "C",
     "pct": 0,
     "collisions": 2,
-    "dunks": 14,
-    "fish": 13,
-    "score": 1950
+    "dunks": 3,
+    "fish": 15,
+    "score": 3350
    },
    "draw": {
-    "near": 0,
-    "mid": 3998,
+    "near": 877,
+    "mid": 3121,
     "far": 0
    },
-   "calls": 28,
-   "tris": 326666
+   "calls": 14,
+   "tris": 1385936
   },
   "brawl40": {
    "mode": "play",
@@ -405,7 +405,7 @@
    "diff": "flock",
    "pathPct": null,
    "q": 1,
-   "dist": 0.61,
+   "dist": 0.6,
    "collisions": 0,
    "dunks": 0,
    "fish": 0,
@@ -420,9 +420,9 @@
     "grade": "C",
     "pct": 0,
     "collisions": 2,
-    "dunks": 14,
-    "fish": 13,
-    "score": 1950
+    "dunks": 3,
+    "fish": 15,
+    "score": 3350
    },
    "draw": {
     "near": 0,
@@ -438,28 +438,28 @@
   },
   "brawl": {
    "mode": "end",
-   "t": 112.46,
+   "t": 73.62,
    "diff": "flock",
    "pathPct": null,
    "q": 0,
-   "dist": 0.61,
+   "dist": 0.6,
    "collisions": 0,
    "dunks": 0,
    "fish": 0,
-   "fishSpawned": 35,
-   "fishMissed": 34,
-   "score": 1290,
+   "fishSpawned": 27,
+   "fishMissed": 25,
+   "score": 930,
    "birds": 4000,
    "falling": 0,
    "lost": 0,
-   "fps": 59,
+   "fps": 58,
    "result": {
     "grade": "C",
-    "place": 8,
+    "place": 9,
     "won": false,
-    "kos": 3,
-    "hits": 6,
-    "score": 1290,
+    "kos": 2,
+    "hits": 5,
+    "score": 930,
     "fish": 0,
     "pct": 0,
     "collisions": 0,
@@ -470,8 +470,8 @@
     "mid": 0,
     "far": 0
    },
-   "calls": 7,
-   "tris": 107800
+   "calls": 9,
+   "tris": 109692
   }
  }
 }
