@@ -111,7 +111,7 @@ export class Player {
     this.phase = 0; this.glide = 0; this.bound = 0; this.flapRate = 13.3; this.sinkY = 0;
     let sd = 12345; this.wing = newWing(() => ((sd = (sd * 16807) % 2147483647) / 2147483647), 13.3);
     this.gust = { x: 0, z: 0, tx: 0, tz: 0, t: 0 };
-    this.dunks = 0;
+    this.dunks = 0; this.wet = false; this.wetEnter = false; this.wetExit = false; this.wakeT = 0;
     this._dir();
   }
   _dir() {
@@ -158,12 +158,21 @@ export class Player {
     g.x += (g.tx - g.x) * (1 - Math.exp(-dt / 0.9)); g.z += (g.tz - g.z) * (1 - Math.exp(-dt / 0.9));
     this.vx = this.fx * this.speed + g.x; this.vy = this.fy * this.speed; this.vz = this.fz * this.speed + g.z;
     this.x += this.vx * dt; this.y += this.vy * dt; this.z += this.vz * dt;
-    // the sea surface under the bird (set by the game from the wave field each frame)
-    const floorY = (this.seaY || 0) + 0.45;
-    if (this.y < floorY) {
-      this.y = floorY;
-      if (this.pitch < 0.1) { this.pitch = 0.42; this.speed *= 0.7; this.dunks++; if (onDunk) onDunk(this.x, this.z); }
+    // the sea surface under the bird (set by the game from the wave field each frame). The bird can dip in, down to
+    // DIP m under the surface: the water drags it and buoyancy lifts the nose.
+    const sea = this.seaY || 0, DIP = 0.1;
+    const wasWet = !!this.wet;
+    this.wet = this.y < sea + (wasWet ? 0.12 : 0.06);
+    this.wetEnter = this.wet && !wasWet; this.wetExit = !this.wet && wasWet;
+    if (this.wet) {
+      const depth = sea + 0.06 - this.y;
+      this.speed *= Math.exp(-dt * (0.6 + 2.5 * depth));
+      this.pitch += (0.35 - this.pitch) * (1 - Math.exp(-dt / 0.35)) * Math.min(1, depth / DIP + 0.3);
+      this._dir();
     }
+    // a steep plunge (nose more than ~26° down as it hits the water) is a splashdown; a shallower dip is free
+    if (this.wetEnter && this.pitch < -0.45) { this.pitch = 0.42; this.speed *= 0.7; this.dunks++; this._dir(); if (onDunk) onDunk(this.x, this.z); }
+    if (this.y < sea - DIP) { this.y = sea - DIP; if (this.pitch < 0.1) { this.pitch = 0.1; this._dir(); } }
     if (this.y > 140) { this.y = 140; this.pitch = Math.min(this.pitch, 0); }
     this.invuln = Math.max(0, this.invuln - dt);
     // visual roll: a coordinated turn (bank = atan(v·ω/g)), right turn = right wing down = + roll

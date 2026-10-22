@@ -573,6 +573,9 @@ function frame(dtReal) {
         const along = ex * S.fx + ey * S.fy + ez * S.fz;
         P.seaY = world.sea.heightAt(P.x, P.z);
         P.step(h, inp, S, S.v, along, G.gameMode !== 'murm' ? FRENZY_FLIGHT[G.diffKey] : D, G.R, onDunk);
+        // a dip into the sea: a splash going in and coming out, and a wake of spray while the body is in the water
+        if (P.wetEnter || P.wetExit) { rings.ring(P.x, P.z, 1.2, 1.1, 0.45); spray.splash(P.x, P.z, 0.6, G.R); sound.splash(0.3); }
+        if (P.wet && (P.wakeT -= h) <= 0) { P.wakeT = 0.09; spray.splash(P.x, P.z, 0.35, G.R); rings.ring(P.x, P.z, 0.7, 0.9, 0.3); }
       }
       if (G.gameMode === 'fish') frenzyTick(dt);
       else if (G.gameMode === 'brawl') brawlTick(dt, t);
@@ -899,13 +902,15 @@ function updateCamera(dt, S) {
   camState.fwd.lerp(f, 1 - Math.exp(-dt / 0.2)).normalize();
   // the camera follows only part of the bird's climb or dive, so the horizon stays in view
   const cf = _f2.set(camState.fwd.x, camState.fwd.y * 0.55, camState.fwd.z).normalize();
-  const back = 1.5 + P.boosting * 0.45, upOff = 0.4;
+  // while the bird skims in the water the camera rises a little, so wave crests don't hide it
+  camState.wet = (camState.wet || 0) + ((P.wet ? 1 : 0) - (camState.wet || 0)) * (1 - Math.exp(-dt / 0.25));
+  const back = 1.5 + P.boosting * 0.45, upOff = 0.4 + 0.6 * camState.wet;
   // smooth the offset from the bird, not the world position, so speed never drags the camera back
   const want = _w.set(-cf.x * back, -cf.y * back + upOff, -cf.z * back);
   if (!camState.off) camState.off = want.clone();
   camState.off.lerp(want, 1 - Math.exp(-dt / 0.08));
   let pos = new THREE.Vector3(P.x, P.y, P.z).add(camState.off);
-  pos.y = Math.max(pos.y, world.sea.heightAt(pos.x, pos.z) + 0.45);
+  pos.y = Math.max(pos.y, world.sea.heightAt(pos.x, pos.z) + 0.45 + 0.5 * camState.wet);
   let lk = _v.set(P.x + cf.x * 5, P.y + cf.y * 5 + 0.4, P.z + cf.z * 5).clone();
   if (G.mode === 'intro') {
     const k = smooth(0, 1, G.introT / Math.max(0.01, G.introLen * 0.8));

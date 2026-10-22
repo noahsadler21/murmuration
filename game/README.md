@@ -4,14 +4,16 @@ A browser game made from the murmuration page's look and starling assets: you ar
 of 4,000 (1,600 on phones), flying over a grey-blue sea under a bright overcast sky.
 
 - **Hold your place.** The flock sweeps, folds and sends waves through itself; your bird has a slot in it. The orange
-  rings and dots show your slot's path for the next two seconds, and an orange ghost bird appears where you should be
+  dots show your slot's path for the next two seconds, and rings hang in the sky along it: they appear as you near them
+  and score when you fly through (more on a streak), and an orange ghost bird appears where you should be
   when you stray. The live **in line %** is the share of time you spend inside the tolerance tube around the slot,
   weighted by how well your heading matches the flock's flow.
 - **Don't touch your neighbours.** They make room for a smooth flyer but can't dodge a barging one. A bird you hit
   tumbles out of the sky in a burst of feathers and falls into the sea (−120). Later in the run some neighbours drift
   back through your lane.
 - **Flying fish.** On the four sea runs the flock skims the water. A dark shape under the surface means a fish is about
-  to leap; dive and grab it in the air (+100, chained catches multiply). Every dive costs you in-line time.
+  to leap; dive and grab it in the air (+100, chained catches multiply). Every dive costs you in-line time. You can
+  skim the surface with your body in the water (it slows you); only a steep plunge is a splashdown.
 - Two minutes per run, getting harder as it goes (tighter, faster turns, more waves). At the end you get a grade
   (S–D, from in-line % minus collisions), your score and a second-by-second chart of the run.
 
