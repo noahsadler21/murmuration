@@ -86,17 +86,25 @@ const guide = (() => {
   return { pts, g, p, a, s };
 })();
 
-// hoops: thin rings across the slot's path every 0.45 s ahead, perpendicular to the flock's flow
+// hoops: rings fixed in the sky along the slot's path, one every 0.45 s of flight. Each is placed once (where the
+// slot will be), fades in as the player's bird comes near, and is scored when the bird flies through its plane.
+const GATE_DT = 0.45, GATE_AHEAD = 1.9;
 const hoops = [];
 {
   const g = new THREE.PlaneGeometry(2, 2);
-  for (let k = 0; k < 4; k++) {
+  for (let k = 0; k < 8; k++) {
     const m = new THREE.ShaderMaterial({ vertexShader: SH.RING_VERT, fragmentShader: SH.RING_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
       uniforms: { uCol: { value: LOOK.accent.clone() }, uA: { value: 0 }, uR: { value: 0.88 }, uW: { value: 0.028 } } });
     const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false; mesh.renderOrder = 8; mesh.visible = false;
     scene.add(mesh);
-    hoops.push({ mesh, m });
+    hoops.push({ mesh, m, gate: null });
   }
+}
+const gates = { nextT: 0, streak: 0, passed: 0, missed: 0 };
+function resetGates(t) {
+  gates.nextT = Math.ceil((t + 0.6) / GATE_DT) * GATE_DT;
+  gates.streak = 0; gates.passed = 0; gates.missed = 0;
+  for (const h of hoops) { h.gate = null; h.mesh.visible = false; }
 }
 let lods = null, hero = null, ghost = null, heroGLB = null;
 let assets = null;
@@ -259,6 +267,7 @@ function startRun(opts = {}) {
   const introLen = opts.skipIntro ? 0 : 3.2;
   G.t = -introLen;
   G.introT = 0; G.introLen = introLen;
+  resetGates(G.t);
   G.flock.slotAt(G.t, tmpS);
   const S = slotFlow(G.t);
   G.player.reset(tmpS.x, tmpS.y, tmpS.z, Math.atan2(S.fx, S.fz), Math.asin(S.fy), S.v);
@@ -795,22 +804,73 @@ function updateGuide(t, off) {
     g.s[k] = 0.07;
   }
   for (const n of ['position', 'aA', 'aS']) g.g.attributes[n].needsUpdate = true;
-  hoops.forEach((h, k) => {
-    const tk = t + 0.45 * (k + 1);
-    G.flock.slotAt(tk, tmpA);
-    const bank = tmpA.bank;
+  updateGates(t, bright);
+}
+
+function updateGates(t, bright) {
+  const P = G.player, tol = DIFF[G.diffKey].tol, rad = 0.7 * tol;
+  const scoring = G.mode === 'play';
+  // place the rings that have come within GATE_AHEAD of the slot's flight; once placed, a ring never moves
+  while (gates.nextT < t + GATE_AHEAD) {
+    const h = hoops.find((x) => !x.gate);
+    if (!h) break;
+    const tk = gates.nextT; gates.nextT += GATE_DT;
+    G.flock.slotAt(tk, tmpA); const bank = tmpA.bank;
     G.flock.slotAt(tk + 0.05, tmpB);
+    let fx = tmpB.x - tmpA.x, fy = tmpB.y - tmpA.y, fz = tmpB.z - tmpA.z; const fl = Math.hypot(fx, fy, fz) || 1;
+    fx /= fl; fy /= fl; fz /= fl;
+    h.gate = { t: tk, x: tmpA.x, y: tmpA.y, z: tmpA.z, fx, fy, fz, state: 'live', sPrev: null, t1: 0, a: 0 };
     const m = h.mesh;
-    m.visible = true;
     m.position.set(tmpA.x, tmpA.y, tmpA.z);
     m.up.set(0, 1, 0);
     m.lookAt(tmpB.x, tmpB.y, tmpB.z);
     m.rotateZ(bank);
-    m.scale.setScalar(0.55);
+    m.scale.setScalar(rad / 0.88);
+    h.m.uniforms.uCol.value.copy(LOOK.accent);
+  }
+  for (const h of hoops) {
+    const g = h.gate;
+    if (!g) continue;
+    const ex = P.x - g.x, ey = P.y - g.y, ez = P.z - g.z;
+    const sd = ex * g.fx + ey * g.fy + ez * g.fz;          // signed distance of the bird past the ring's plane
+    const d = Math.hypot(ex, ey, ez);
+    if (g.state === 'live') {
+      if (g.sPrev !== null && g.sPrev < 0 && sd >= 0) {
+        const rr = Math.hypot(ex - sd * g.fx, ey - sd * g.fy, ez - sd * g.fz);
+        if (rr < rad * 1.2) {
+          g.state = 'passed'; g.t1 = t;
+          if (scoring) {
+            gates.passed++; gates.streak++;
+            // a ring is worth about as much as the in-line points for the same stretch, more on a streak
+            G.score += 5 + Math.min(gates.streak - 1, 10);
+            if (gates.streak % 10 === 0) { floatText(gates.streak + ' rings', g.x, g.y + 0.4, g.z, 'good'); sound.chime(true); }
+          }
+        } else { g.state = 'missed'; g.t1 = t; if (scoring) { gates.missed++; gates.streak = 0; } }
+      } else if (t > g.t + 1.2 || sd > 4) { g.state = 'missed'; g.t1 = t; if (scoring) { gates.missed++; gates.streak = 0; } }
+      g.sPrev = sd;
+    }
+    const m = h.mesh, U = h.m.uniforms;
+    m.visible = true;
     const cd = camera.position.distanceTo(m.position);
-    h.m.uniforms.uA.value = bright * 0.9 * smooth(1.6, 3.2, cd) * (1 - k * 0.18);
-  });
+    if (g.state === 'live') {
+      // appears as the bird comes into its vicinity
+      const want = bright * 0.95 * smooth(26, 10, d) * smooth(0.8, 2.2, cd);
+      g.a += (want - g.a) * 0.25;
+      U.uA.value = g.a;
+    } else if (g.state === 'passed') {
+      const k = (t - g.t1) / 0.35;
+      m.scale.setScalar((rad / 0.88) * (1 + 0.45 * k));
+      U.uCol.value.copy(LOOK.accent).lerp(_white, 0.6);
+      U.uA.value = Math.max(0, 1 - k) * Math.max(g.a, 0.6);
+      if (k >= 1) { h.gate = null; m.visible = false; }
+    } else {
+      const k = (t - g.t1) / 0.4;
+      U.uA.value = Math.max(0, 1 - k) * g.a * 0.5;
+      if (k >= 1) { h.gate = null; m.visible = false; }
+    }
+  }
 }
+const _white = new THREE.Color(1, 1, 1);
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _u = new THREE.Vector3(), _f2 = new THREE.Vector3();
 function updateCamera(dt, S) {
@@ -1250,7 +1310,7 @@ window.game = {
     return {
       mode: G.mode, t: +G.t.toFixed(2), diff: G.diffKey, pathPct: G.qTime > 0 ? +(100 * G.qSum / G.qTime).toFixed(2) : null,
       q: +G.q.toFixed(3), dist: G.dist && +G.dist.toFixed(2), collisions: G.collisions, dunks: G.dunks, fish: G.fish, fishSpawned: fishes.spawned,
-      fishMissed: fishes.missed, score: Math.round(G.score), birds: F.N, falling, lost: F.lost, fps: Math.round(fpsE), result: G.result || null,
+      fishMissed: fishes.missed, rings: { passed: gates.passed, missed: gates.missed, streak: gates.streak }, score: Math.round(G.score), birds: F.N, falling, lost: F.lost, fps: Math.round(fpsE), result: G.result || null,
       draw: { near: lods.near.n, mid: lods.mid.n, far: lods.far.n }, calls: renderer.info.render.calls, tris: renderer.info.render.triangles,
     };
   },
